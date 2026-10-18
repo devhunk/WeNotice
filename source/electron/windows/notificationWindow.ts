@@ -24,8 +24,8 @@ export class NotificationWindows {
       if (!allowed(event) || data?.id !== this.queue.active?.id || !Number.isFinite(data.width) || !Number.isFinite(data.height)) return
       const area = screen.getPrimaryDisplay().workArea
       const width = notificationLayout(this.queue.active!.content, this.settings().position, area.width, area.height).width
-      const maxHeight = Math.max(1, Math.min(300, area.height - 40))
-      const height = Math.max(Math.min(112, maxHeight), Math.min(maxHeight, Math.ceil(data.height)))
+      const maxHeight = Math.max(1, Math.min(320, area.height - 40))
+      const height = Math.max(76, Math.min(maxHeight, Math.ceil(data.height)))
       if (this.win) { const [w, h] = this.win.getSize(); if (w !== width || h !== height) this.win.setSize(width, height); this.position(); this.refreshBackdropCoordinates() }
     })
     ipcMain.on('notice:glassRect', (event, payload) => { if (allowed(event) && payload?.id === this.queue.active?.id) this.glassRect(payload) })
@@ -36,7 +36,7 @@ export class NotificationWindows {
   private create() {
     if (this.win && !this.win.isDestroyed()) return this.win
     this.ready = false
-    const win = new BrowserWindow({ width: 344, height: 114, type: 'toolbar', frame: false, transparent: true, hasShadow: false, show: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, webPreferences: { preload: join(__dirname, 'notificationPreload.cjs'), contextIsolation: true, nodeIntegration: false } })
+    const win = new BrowserWindow({ width: 344, height: 86, type: 'toolbar', frame: false, transparent: true, hasShadow: false, show: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, focusable: false, webPreferences: { preload: join(__dirname, 'notificationPreload.cjs'), contextIsolation: true, nodeIntegration: false } })
     this.win = win
     if (this.native) { try { if (!this.native.setWindowCapturePolicy(win, 'dda-only')) this.native = null } catch { this.native = null } }
     if (!this.native) win.setContentProtection(true)
@@ -94,7 +94,7 @@ export class NotificationWindows {
     try {
       if (this.panelDpr !== dpr) this.destroyPanel()
       if (!this.panel) {
-        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: 12 * dpr, blurSigma: 2 * dpr, displacementScale: 35, aberrationIntensity: .4, saturation: 1.2, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
+        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: 14 * dpr, blurSigma: 2 * dpr, displacementScale: 35, aberrationIntensity: .4, saturation: 1.2, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
         this.panelDpr = dpr
         if (!this.panel) throw new Error('原生玻璃不可用')
       } else { this.panel.setBounds(bounds); this.panel.setLumaBands(bands); this.panel.anchor(this.win) }

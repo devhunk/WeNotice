@@ -1,0 +1,201 @@
+name: CI & Release
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**.md'
+      - 'archive/**'
+      - '.gitignore'
+  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**.md'
+      - 'archive/**'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '是否正式发布到 GitHub Releases (若为 false 则仅打包为 Actions Artifact 供下载)'
+        type: boolean
+        required: true
+        default: true
+      tag_name:
+        description: '发布版本号 / Tag 名称 (留空则默认读取 source/package.json 版本，如 v0.1.5)'
+        required: false
+        type: string
+        default: ''
+      release_title:
+        description: 'Release 标题 (留空则默认为 "WeNotice <tag>")'
+        required: false
+        type: string
+        default: ''
+      draft:
+        description: '是否发布为草稿 (Draft)'
+        type: boolean
+        required: false
+        default: false
+      prerelease:
+        description: '是否发布为预发布版本 (Pre-release)'
+        type: boolean
+        required: false
+        default: false
+      release_notes:
+        description: '自定义 Release 更新日志说明 (可选，留空则自动提取变更记录)'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  test:
+    name: 自动编译与测试
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'source/package-lock.json'
+
+      - name: 安装项目依赖
+        working-directory: source
+        run: npm ci
+
+      - name: 执行自动化测试
+        working-directory: source
+        run: npm test
+
+      - name: 执行构建与类型检查
+        working-directory: source
+        run: npm run build
+
+  release:
+    name: 打包并发布 Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 配置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'source/package-lock.json'
+
+      - name: 安装项目依赖
+        working-directory: source
+        run: npm ci
+
+      - name: 解析版本与发布信息
+        id: info
+        shell: pwsh
+        run: |
+          $pkg = Get-Content source/package.json -Raw | ConvertFrom-Json
+          $pkgVersion = $pkg.version
+
+          $refType = "${{ github.ref_type }}"
+          $refName = "${{ github.ref_name }}"
+          $inputTag = "${{ inputs.tag_name }}"
+          $inputTitle = "${{ inputs.release_title }}"
+
+          if ($refType -eq "tag" -and $refName) {
+            $tag = $refName
+          } elseif ($inputTag -and $inputTag.Trim() -ne "") {
+            $tag = $inputTag.Trim()
+          } else {
+            $tag = "v$pkgVersion"
+          }
+
+          if ($inputTitle -and $inputTitle.Trim() -ne "") {
+            $title = $inputTitle.Trim()
+          } else {
+            $title = "WeNotice $tag"
+          }
+
+          Write-Output "pkg_version=$pkgVersion" >> $env:GITHUB_OUTPUT
+          Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Output "title=$title" >> $env:GITHUB_OUTPUT
+          Write-Host "Resolved Version: $pkgVersion, Tag: $tag, Title: $title"
+
+      - name: 打包免安装便携版
+        working-directory: source
+        env:
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+        run: npm run dist:portable
+
+      - name: 压缩便携版并准备产物目录
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.info.outputs.tag }}"
+          $portableZip = "releases/WeNotice-$tag-windows-x64-portable.zip"
+          Write-Host "Compressing releases/win-unpacked to $portableZip ..."
+          Compress-Archive -Path "releases/win-unpacked/*" -DestinationPath $portableZip -Force
+
+      - name: 打包 Windows NSIS 安装包
+        working-directory: source
+        env:
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+        run: npm run dist:win
+
+      - name: 生成 SHA256 校验和
+        shell: pwsh
+        run: |
+          Write-Host "Generating SHA256 checksums..."
+          $hashLines = Get-ChildItem -Path releases | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower()
+            "$h  $($_.Name)"
+          }
+          $hashLines | Set-Content -Path "releases/SHA256SUMS.txt" -Encoding utf8
+          Write-Host "--- SHA256SUMS.txt ---"
+          Get-Content "releases/SHA256SUMS.txt"
+
+      - name: 上传构建产物至 Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wenotice-${{ steps.info.outputs.tag }}
+          path: |
+            releases/*.exe
+            releases/*.exe.blockmap
+            releases/*.zip
+            releases/SHA256SUMS.txt
+          retention-days: 14
+
+      - name: 发布至 GitHub Releases
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: ${{ steps.info.outputs.title }}
+          draft: ${{ inputs.draft || false }}
+          prerelease: ${{ inputs.prerelease || false }}
+          body: ${{ inputs.release_notes }}
+          generate_release_notes: true
+          target_commitish: ${{ github.sha }}
+          files: |
+            releases/*.exe
+            releases/*.exe.blockmap
+            releases/*.zip
+            releases/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

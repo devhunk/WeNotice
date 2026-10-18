@@ -78,7 +78,7 @@ export default function NotificationWindow() {
   if (!delivery) return null
   const { notice } = delivery
   return <div ref={root} id="notification-current" key={notice.id} style={{ '--noti-body-lines': delivery.layout?.maxBodyLines || 6 } as React.CSSProperties} className={`notification-toast-container ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
-    <LiquidGlass cornerRadius={12} padding="14px 16px" blurAmount={0} saturation={120} displacementScale={35} aberrationIntensity={.4} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(true)}>
+    <LiquidGlass cornerRadius={14} padding="12px 14px" blurAmount={0} saturation={120} displacementScale={35} aberrationIntensity={.4} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(true)}>
       <NotificationContent notice={notice} onClose={() => close()} />
     </LiquidGlass>
   </div>

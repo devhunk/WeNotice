@@ -13,16 +13,58 @@ export function NoticeAvatar({ src, name, className = '' }: { src?: string; name
 
 // Keep the settings preview and desktop toast text layout in sync.
 export default function NotificationContent({ notice, onClose }: { notice: Notice; onClose?: () => void }) {
-  return <div className="notification-content">
-    <div className="notification-avatar"><NoticeAvatar src={notice.avatarUrl} name={notice.title} /></div>
-    <div className="notification-header">
-      <span className="notification-title">{notice.title}</span>
-      <div className="notification-meta">
-        {notice.count > 1 && <span className="notification-count" aria-label={`${notice.count} 条新消息`}>{notice.count > 99 ? '99+' : notice.count} 条</span>}
-        <time className="notification-time" dateTime={new Date(notice.timestamp * 1000).toISOString()}>{new Date(notice.timestamp * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time>
+  const hasMultiple = notice.count > 1
+  const displayCount = notice.count > 99 ? '99+' : notice.count
+
+  return (
+    <div className="notification-content">
+      <div className="notification-avatar-container">
+        <NoticeAvatar src={notice.avatarUrl} name={notice.title} />
+        {hasMultiple && (
+          <span className="notification-avatar-badge" aria-label={`${notice.count} 条新消息`}>
+            {displayCount}
+          </span>
+        )}
       </div>
-      {onClose ? <button className="notification-close" aria-label="关闭通知" onClick={event => { event.stopPropagation(); onClose() }}><X size={13} /></button> : <span className="notification-close" aria-hidden="true"><X size={13} /></span>}
+
+      <div className="notification-main">
+        <div className="notification-header">
+          <div className="notification-sender">
+            <span className="notification-title" title={notice.title}>{notice.title}</span>
+            {hasMultiple && (
+              <span className="notification-count-tag" aria-hidden="true">
+                {displayCount}条新消息
+              </span>
+            )}
+          </div>
+          <div className="notification-meta">
+            <time className="notification-time" dateTime={new Date(notice.timestamp * 1000).toISOString()}>
+              {new Date(notice.timestamp * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            </time>
+            {onClose ? (
+              <button 
+                className="notification-close" 
+                aria-label="关闭通知" 
+                title="关闭通知"
+                onClick={event => { 
+                  event.stopPropagation()
+                  onClose() 
+                }}
+              >
+                <X size={13} strokeWidth={2.2} />
+              </button>
+            ) : (
+              <span className="notification-close" aria-hidden="true">
+                <X size={13} strokeWidth={2.2} />
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="notification-body">
+          {renderTextWithEmoji(notice.content, 18)}
+        </div>
+      </div>
     </div>
-    <div className="notification-body">{renderTextWithEmoji(notice.content, 19)}</div>
-  </div>
+  )
 }

@@ -65,24 +65,26 @@ const WHITE_VEIL_ALPHA: readonly [number, number] = [0.24, 0.48]
 const DARK_VEIL_ALPHA: readonly [number, number] = [0.4, 0.65]
 
 /**
- * 正文为主信息，联系人为辅助信息；两者独立保持足够对比度，
- * 层级同时由字号、字重和布局保证，避免复杂背景下仅靠灰度区分。
+ * 发件人为主导标识，正文为核心内容；两者层次分明，
+ * 发件人拥有高对比度和清晰度，确保用户一眼看清来源。
  */
-const PRIMARY_TEXT: { dark: TextAnchor; light: TextAnchor } = {
-    dark: { relaxed: [25, 32, 39], strong: [8, 12, 16] },
-    light: { relaxed: [247, 249, 252], strong: [255, 255, 255] }
+const TITLE_TEXT: { dark: TextAnchor; light: TextAnchor } = {
+    dark: { relaxed: [18, 24, 30], strong: [6, 10, 14] },
+    light: { relaxed: [250, 252, 255], strong: [255, 255, 255] }
+}
+
+const BODY_TEXT: { dark: TextAnchor; light: TextAnchor } = {
+    dark: { relaxed: [40, 48, 56], strong: [16, 22, 28] },
+    light: { relaxed: [232, 237, 242], strong: [250, 252, 255] }
 }
 
 /** 文字锚点：dark = 深色文字（浅背景用），light = 浅色文字（深背景用） */
 const ANCHORS: Record<'title' | 'body' | 'tertiary', { dark: TextAnchor; light: TextAnchor }> = {
-    title: {
-        dark: { relaxed: [88, 96, 103], strong: [38, 44, 50] },
-        light: { relaxed: [196, 203, 210], strong: [242, 246, 249] }
-    },
-    body: PRIMARY_TEXT,
+    title: TITLE_TEXT,
+    body: BODY_TEXT,
     tertiary: {
-        dark: { relaxed: [122, 122, 122], strong: [61, 61, 61] },
-        light: { relaxed: [176, 172, 166], strong: [216, 213, 207] }
+        dark: { relaxed: [115, 124, 133], strong: [65, 72, 80] },
+        light: { relaxed: [170, 178, 186], strong: [215, 222, 228] }
     }
 }
 

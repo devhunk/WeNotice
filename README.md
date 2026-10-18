@@ -98,6 +98,43 @@ npm run dist:win
 
 ---
 
+## 🤖 CI/CD 自动化构建与发布
+
+项目配置了完整的 GitHub Actions 工作流（[`.github/workflows/build-and-release.yml`](.github/workflows/build-and-release.yml)）：
+
+### 1. 提交自动测试与编译（CI）
+- **触发条件**：每次向仓库推送代码（`push`）或发起拉取请求（`pull_request`）时自动触发。
+- **执行内容**：自动在 Windows Server 虚拟环境中拉取依赖、运行自动化单元测试，并完成 TypeScript 类型检查与全量构建验证，保障每一次提交的稳定性。
+
+### 2. 按需打包与发布 Release（CD）
+支持两种发布触发方式：
+
+- **方式一：GitHub 页面一键手动触发（推荐）**
+  1. 进入 GitHub 仓库页面，点击 **Actions** 标签。
+  2. 在左侧选择 **CI & Release** 工作流，点击右上角 **Run workflow**。
+  3. 可按需配置发布选项：
+     - `publish_release`：是否正式发布到 GitHub Releases（默认为 `true`；若设为 `false` 则仅打包并保留为 Actions Artifacts 供下载测试）。
+     - `tag_name`：指定发布的版本 Tag（如 `v0.1.6`，留空则默认读取 `source/package.json` 中的版本）。
+     - `release_title`：自定义 Release 标题（留空默认为 `WeNotice <tag>`）。
+     - `draft` / `prerelease`：是否作为草稿或预发布版本。
+     - `release_notes`：自定义更新日志说明（留空则自动提取 commits 和 PR 记录）。
+  4. 点击 **Run workflow** 按钮启动，CI 测试通过后会自动编译、生成安装包与便携包，并发布至 Releases。
+
+- **方式二：推送 Git Tag 自动发布**
+  在本地打好版本 Tag 并推送到 GitHub，即可自动触发完整测试并发布 Release：
+  ```powershell
+  git tag v0.1.6
+  git push origin v0.1.6
+  ```
+
+每次发布会自动生成并上传以下产物：
+- **Windows NSIS 安装包**：`WeNotice Setup <version>.exe`
+- **免安装便携版**：`WeNotice-<tag>-windows-x64-portable.zip`
+- **增量更新映射**：`WeNotice Setup <version>.exe.blockmap`
+- **SHA256 校验和**：`SHA256SUMS.txt`（包含所有产物的 SHA256 哈希值）
+
+---
+
 ## 🔒 隐私与安全性
 
 1. **零写入安全设计**：应用仅以只读方式查询本地微信数据库，绝不修改、删除或篡改任何数据。
