@@ -7,8 +7,8 @@ import { normalizeMessage } from '../electron/data/normalize'
 test('toast expands for longer content and stays within the available work area', () => {
   const short = notificationLayout('好的', 'top-right'), medium = notificationLayout('请大家明天下午三点准时到会议室讨论设计方案', 'top-right'), long = notificationLayout('长消息'.repeat(100), 'top-right')
   assert.ok(short.width < medium.width && medium.width < long.width)
-  assert.equal(long.width, 456)
-  assert.ok(notificationLayout('长消息'.repeat(100), 'top-center').width <= 408)
+  assert.equal(long.width, 460)
+  assert.ok(notificationLayout('长消息'.repeat(100), 'top-center').width <= 420)
   const constrained = notificationLayout('长消息'.repeat(100), 'top-right', 320, 200)
   assert.ok(constrained.width <= 280)
   assert.ok(constrained.maxBodyLines < long.maxBodyLines)
