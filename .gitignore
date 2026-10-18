@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production and build outputs
+dist/
+dist-electron/
+**/dist/
+**/dist-electron/
+releases/
+release*/
+
+# Local archives and personal data backups
+archive/
+*.zip
+*.tar.gz
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and sensitive files
+.env
+.env.*
+*.local
+
+# System and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.user

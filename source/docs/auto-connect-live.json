@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-10-17T07:15:36.334Z",
+  "savedSettings": false,
+  "displayedMessages": false,
+  "accountsDetected": 1,
+  "packagedWorker": true,
+  "keyComponentSha256": "9cd7e29d3739e7f2d0b242cefe7ed3937cda7e6174f2874cc3b323dc023bd226",
+  "lastPhase": "verifying",
+  "processesDetected": 5,
+  "nativeKeyRecovered": true,
+  "databaseOpened": true,
+  "sessionsRead": 464,
+  "monitorMode": "pipe",
+  "success": true
+}

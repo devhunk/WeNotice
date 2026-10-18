@@ -1,0 +1,59 @@
+import { decompress } from 'fzstd'
+import type { Message, Session } from '../../shared/types'
+import { accountIdentity } from '../../shared/accountIdentity'
+
+export function parseNativeJson(json: string): any {
+  // Preserve 64-bit message IDs before JSON.parse rounds them.
+  return JSON.parse(json.replace(/("(?:server_id|svr_id|msg_svr_id)"\s*:\s*)(-?\d{16,})(?=\s*[,}])/g, '$1"$2"'))
+}
+const str = (v: unknown): string => v == null ? '' : String(v)
+export const seconds = (v: unknown): number => { const n = Number(v) || 0; return n > 1e11 ? Math.floor(n / 1000) : Math.floor(n) }
+function binary(data: Uint8Array): string {
+  const b = Buffer.from(data)
+  if (b.length >= 4 && b.readUInt32LE() === 0xfd2fb528) return Buffer.from(decompress(b)).toString('utf8')
+  return new TextDecoder('utf-8', { fatal: true }).decode(b)
+}
+function decode(raw: unknown): string {
+  if (!raw) return ''
+  try {
+    if (raw instanceof Uint8Array) return binary(raw)
+    if (typeof raw === 'object' && (raw as any).type === 'Buffer') return binary(Uint8Array.from((raw as any).data))
+    if (typeof raw !== 'string') return ''
+    // Do not decode arbitrary plain words or numeric messages as base64/hex.
+    if (/^(28b52ffd)/i.test(raw) && /^[\da-f]+$/i.test(raw)) return binary(Buffer.from(raw, 'hex'))
+    if (/^KLUv\//.test(raw)) return binary(Buffer.from(raw, 'base64'))
+    return raw
+  } catch { return '[无法解码的消息]' }
+}
+function summary(content: string, type: number): string {
+  const text = content.replace(/^[^\s:<>]+:\n/, '')
+  if (type === 1) return text
+  const labels: Record<number, string> = { 3: '[图片]', 34: '[语音]', 43: '[视频]', 47: '[表情]', 48: '[位置]', 50: '[通话]', 10000: '[系统消息]', 10002: '[撤回消息]' }
+  if (labels[type]) return labels[type]
+  if (type === 49 || (type & 0xffff) === 49) {
+    const title = text.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1]
+    return title ? `[分享] ${title.replace(/<[^>]*>/g, '').slice(0, 300)}` : '[分享或文件]'
+  }
+  return '[新消息]'
+}
+export function normalizeSession(row: any): Session {
+  return { id: str(row.username ?? row.user_name ?? row.userName ?? row.usrName ?? row.UsrName ?? row.talker ?? row.talker_id), timestamp: seconds(row.last_timestamp ?? row.lastTimestamp ?? row.last_msg_time ?? row.sort_timestamp), unread: Number(row.unread_count ?? row.unreadCount ?? row.unreadcount) || 0, summary: str(row.summary ?? row.digest ?? row.last_msg) }
+}
+export function normalizeMessage(row: any, sessionId: string, selfId: string): Message {
+  const content = decode(row.compress_content) || decode(row.message_content ?? row.content)
+  const realSender = row.real_sender_id ?? row.realSenderId
+  const sender = str(row.sender_username ?? row.senderUsername) || (typeof realSender === 'string' && !/^\d+$/.test(realSender) ? realSender : '') || content.match(/^([^\s:<>]+):\n/)?.[1] || ''
+  const flags = [row.computed_is_send, row.is_send, row.isSend].filter(flag => flag != null && flag !== '' && [0, 1].includes(Number(flag))).map(Number)
+  const self = Boolean(sender && selfId && accountIdentity(sender) === accountIdentity(selfId))
+  // Any explicit outgoing indication wins over a derived incoming flag.
+  const outgoing = self || flags.includes(1) ? true : flags.includes(0) ? false : sender ? false : null
+  const timestamp = seconds(row.create_time ?? row.createTime ?? row.msg_time)
+  const localId = str(row.local_id ?? row.localId)
+  const serverId = str(row.server_id ?? row.svr_id ?? row.msg_svr_id)
+  const scope = str(row._db_path ?? row.db_path ?? row.db_name)
+  const table = str(row.table_name ?? row._table_name)
+  const sortSeq = Number(row.sort_seq ?? row.sortSeq) || timestamp * 1000
+  const type = Number(row.local_type ?? row.localType) || 1
+  const identity = serverId && serverId !== '0' ? ['server', serverId] : ['local', scope, table, localId, timestamp, sortSeq, sender, type]
+  return { id: JSON.stringify([sessionId, ...identity]), sessionId, timestamp, sortSeq, localId, sender, outgoing: outgoing as boolean | null, content: summary(content, type).slice(0, 2000) }
+}

@@ -1,0 +1,94 @@
+{
+  "name": "wenotice",
+  "version": "0.1.5",
+  "private": true,
+  "description": "独立的微信桌面通知应用",
+  "author": "WeNotice contributors; derived notification visuals by WeFlow contributors",
+  "license": "CC-BY-NC-SA-4.0",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "start": "electron .",
+    "dist:portable": "npm run build && node scripts/package-portable.mjs",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "@hicccc77/electron-liquid-glass": "^0.4.0",
+    "fzstd": "^0.1.1",
+    "koffi": "^3.1.0",
+    "lucide-react": "^1.23.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.7",
+    "wechat-emojis": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "electron": "^43.5.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "sass": "^1.101.0",
+    "tsx": "^4.20.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3"
+  },
+  "build": {
+    "appId": "app.wenotice.desktop",
+    "productName": "WeNotice",
+    "directories": {
+      "output": "../releases"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "!dist-electron/live-auto-check.cjs",
+      "LICENSE",
+      "licenses/**/*",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/launcher",
+        "to": "launcher"
+      },
+      {
+        "from": "resources/key",
+        "to": "key"
+      },
+      {
+        "from": "resources/wcdb",
+        "to": "wcdb"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "node_modules/electron/dist/electron.exe",
+        "to": "electron.exe"
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**/*",
+      "node_modules/@koromix/koffi-win32-x64/**/*",
+      "node_modules/@hicccc77/electron-liquid-glass/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

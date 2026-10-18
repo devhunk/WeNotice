@@ -1,0 +1,27 @@
+// Adapted from hicccc77/WeFlow @ ad075f7983fcf5c217b0e305065a7298c005541a; see THIRD_PARTY_NOTICES.md.
+// Notification surface variables are provided by the desktop adaptive theme.
+.notice-avatar { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.notice-avatar.placeholder { display: grid; place-items: center; background: #e7f1eb; color: #42825c; font-size: 18px; font-weight: 500; }
+.notification-toast-container {
+  position: relative; width: 100%; padding: 12px; opacity: 0; transform: translateY(-5px) scale(.985);
+  transition: opacity .2s ease, transform .2s ease; pointer-events: none;
+  &.visible { opacity: 1; transform: none; pointer-events: auto; }
+  --liquid-glass-shadow: var(--noti-shadow, 0 0 0 1px #00000006, 0 4px 12px #00000026);
+  --liquid-glass-tint: var(--noti-tint, rgba(255, 255, 255, .24));
+  --liquid-glass-ring: .35;
+  color: var(--noti-title-color, #252e28);
+  .notification-content { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 24px auto; gap: 6px 14px; min-width: 0; min-height: 64px; }
+  .notification-header { grid-column: 2; display: flex; align-items: center; gap: 7px; min-height: 24px; min-width: 0; }
+  .notification-avatar { grid-column: 1; grid-row: 1 / span 2; align-self: start; }
+  .notification-avatar .notice-avatar { display: block; width: 44px; height: 44px; border-radius: 10px; }
+  .notification-avatar .notice-avatar.placeholder { display: grid; font-size: 26px; }
+  .notification-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--noti-title-color, #5b666f); text-shadow: var(--noti-title-halo, none); }
+  .notification-meta { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .notification-time { color: var(--noti-title-tertiary, #7b858e); font-size: 10.5px; line-height: 18px; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .notification-count { padding: 0 5px; border-radius: 5px; color: var(--noti-title-color, #5b666f); background: color-mix(in srgb, currentColor 9%, transparent); font-size: 10px; line-height: 18px; white-space: nowrap; }
+  .notification-body { grid-column: 2; min-width: 0; align-self: start; margin: 0; color: var(--noti-body-color, #192027); text-shadow: var(--noti-body-halo, none); font-size: 15px; font-weight: 500; line-height: 1.6; letter-spacing: .01em; display: -webkit-box; -webkit-line-clamp: var(--noti-body-lines, 6); line-clamp: var(--noti-body-lines, 6); -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
+  .notification-close { flex-shrink: 0; width: 24px; height: 24px; margin-right: 0; padding: 0; border: 0; border-radius: 6px; display: grid; place-items: center; background: transparent; color: var(--noti-title-tertiary, #7b858e); opacity: .7; cursor: pointer; z-index: 2; transition: background .15s, opacity .15s; }
+  button.notification-close:hover { background: var(--noti-close-hover-bg, #0000000a); color: var(--noti-title-color, #5b666f); opacity: 1; }
+  button.notification-close:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+}
+@media (prefers-reduced-motion: reduce) { .notification-toast-container { transition: none; animation: none !important; } }

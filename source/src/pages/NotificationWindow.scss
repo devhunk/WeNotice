@@ -1,0 +1,5 @@
+html[data-surface="notification"], [data-surface="notification"] body { margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif; }
+[data-surface="notification"] * { box-sizing: border-box; }
+.notification-toast-container { animation: notification-enter .3s ease-out; }
+.material-fallback { --liquid-glass-tint: rgba(249, 250, 247, .96); --noti-title-color: #5b666f; --noti-body-color: #192027; --noti-title-tertiary: #7b858e; --noti-title-halo: none; --noti-body-halo: none; }
+@keyframes notification-enter { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: none; } }
