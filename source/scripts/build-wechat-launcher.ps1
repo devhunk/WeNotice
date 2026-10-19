@@ -6,7 +6,7 @@ if (!(Test-Path -LiteralPath $compilerPath)) { throw 'Windows .NET Framework C# 
 $outputRoot = Join-Path $projectRoot 'resources\launcher'
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 $arguments = @('/nologo', '/codepage:65001', '/target:exe', '/optimize+', ('/out:' + (Join-Path $outputRoot 'WeNotice.OpenWechat.exe')))
-foreach ($assembly in @('WPF\UIAutomationClient.dll', 'WPF\UIAutomationTypes.dll', 'WPF\WindowsBase.dll', 'System.Web.Extensions.dll')) {
+foreach ($assembly in @('System.Web.Extensions.dll')) {
   $arguments += '/reference:' + (Join-Path $frameworkRoot $assembly)
 }
 $arguments += Join-Path $projectRoot 'native\wechat\OpenWechat.cs'

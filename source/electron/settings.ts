@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from '
 import { join } from 'node:path'
 import { defaults, type Settings, type DbConfig } from '../shared/types'
 import { configuredAccountId } from '../shared/accountIdentity'
+import { notificationStyle } from '../shared/notificationAppearance'
 const positions = ['top-right', 'bottom-right', 'top-left', 'bottom-left', 'top-center']
 export function validateSettings(input: unknown): Settings {
   if (!input || typeof input !== 'object') throw new Error('设置格式错误')
@@ -13,13 +14,13 @@ export function validateSettings(input: unknown): Settings {
   if (![raw.enabled, raw.launchAtLogin, raw.respectMuted, raw.glass].every(v => typeof v === 'boolean')) throw new Error('开关设置格式错误')
   if (!Number.isFinite(raw.durationMs) || raw.durationMs < 2000 || raw.durationMs > 30000) throw new Error('显示时长必须在 2–30 秒之间')
   if (!Number.isFinite(raw.pollSeconds) || raw.pollSeconds < 2 || raw.pollSeconds > 60) throw new Error('补查间隔必须在 2–60 秒之间')
-  return { accountDir: raw.accountDir.trim(), accountId: configuredAccountId(raw.accountDir.trim(), raw.accountId.trim()), libraryPath: raw.libraryPath.trim(), keyLibraryPath: raw.keyLibraryPath.trim(), enabled: raw.enabled, launchAtLogin: raw.launchAtLogin, respectMuted: raw.respectMuted, glass: raw.glass, position: raw.position, filterMode: raw.filterMode, filterIds: [...new Set(raw.filterIds.map(x => x.trim()).filter(Boolean))], durationMs: Math.round(raw.durationMs), pollSeconds: Math.round(raw.pollSeconds) }
+  return { accountDir: raw.accountDir.trim(), accountId: configuredAccountId(raw.accountDir.trim(), raw.accountId.trim()), libraryPath: raw.libraryPath.trim(), keyLibraryPath: raw.keyLibraryPath.trim(), enabled: raw.enabled, launchAtLogin: raw.launchAtLogin, respectMuted: raw.respectMuted, glass: raw.glass, notificationStyle: notificationStyle(raw.notificationStyle), position: raw.position, filterMode: raw.filterMode, filterIds: [...new Set(raw.filterIds.map(x => x.trim()).filter(Boolean))], durationMs: Math.round(raw.durationMs), pollSeconds: Math.round(raw.pollSeconds) }
 }
 export class SettingsStore {
   settings = { ...defaults }; private encryptedKey = ''; private path: string
   constructor() {
     const directory = app.getPath('userData'); mkdirSync(directory, { recursive: true }); this.path = join(directory, 'settings.json')
-    if (existsSync(this.path)) { try { const saved = JSON.parse(readFileSync(this.path, 'utf8')); this.settings = validateSettings({ ...defaults, ...saved.settings }); this.encryptedKey = typeof saved.encryptedKey === 'string' ? saved.encryptedKey : '' } catch { /* show fresh settings instead of failing app launch */ } }
+    if (existsSync(this.path)) { try { const saved = JSON.parse(readFileSync(this.path, 'utf8')); this.settings = validateSettings({ ...defaults, ...saved.settings, notificationStyle: notificationStyle(saved.settings?.notificationStyle) }); this.encryptedKey = typeof saved.encryptedKey === 'string' ? saved.encryptedKey : '' } catch { /* show fresh settings instead of failing app launch */ } }
     const bundled = join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'wcdb', 'win32', 'x64', 'wcdb_api.dll')
     const previous = this.settings.libraryPath.replace(/\\/g, '/').toLowerCase()
     // Upgrade the known 0.1.0 WeFlow path; retain deliberately selected custom providers.

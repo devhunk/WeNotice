@@ -5,6 +5,7 @@ import type { Delivery, Notice, Settings } from '../../shared/types'
 import type { GlassPanel } from '@hicccc77/electron-liquid-glass'
 import { NoticeQueue } from '../core/noticeQueue'
 import { notificationLayout } from '../../shared/notificationLayout'
+import { glassAppearance, usesGlass } from '../../shared/notificationAppearance'
 
 export class NotificationWindows {
   readonly queue: NoticeQueue
@@ -23,10 +24,11 @@ export class NotificationWindows {
     ipcMain.on('notice:resize', (event, data) => {
       if (!allowed(event) || data?.id !== this.queue.active?.id || !Number.isFinite(data.width) || !Number.isFinite(data.height)) return
       const area = screen.getPrimaryDisplay().workArea
-      const width = notificationLayout(this.queue.active!.content, this.settings().position, area.width, area.height).width
+      const layout = notificationLayout(this.queue.active!, this.settings().position, area.width, area.height)
+      const width = Math.max(Math.min(288, layout.maxWidth), Math.min(layout.maxWidth, Math.ceil(data.width)))
       const maxHeight = Math.max(1, Math.min(320, area.height - 40))
-      const height = Math.max(76, Math.min(maxHeight, Math.ceil(data.height)))
-      if (this.win) { const [w, h] = this.win.getSize(); if (w !== width || h !== height) this.win.setSize(width, height); this.position(); this.refreshBackdropCoordinates() }
+      const height = Math.max(1, Math.min(maxHeight, Math.ceil(data.height)))
+      if (this.win) { this.resize(width, height); this.position(); this.refreshBackdropCoordinates() }
     })
     ipcMain.on('notice:glassRect', (event, payload) => { if (allowed(event) && payload?.id === this.queue.active?.id) this.glassRect(payload) })
     ipcMain.on('notice:glassHide', (event, id) => { if (allowed(event) && id === this.queue.active?.id) this.panel?.hide(240) })
@@ -48,6 +50,15 @@ export class NotificationWindows {
     void win.loadURL(this.url('/notification')).catch(() => { if (this.queue.active) this.queue.close(this.queue.active.id) })
     return win
   }
+  private resize(width: number, height: number) {
+    const win = this.win; if (!win) return
+    const [w, h] = win.getSize(); if (w === width && h === height) return
+    // Windows can retain the previous size constraints on a non-resizable
+    // toolbar. Temporarily release them so a shorter toast can shrink too.
+    const resizable = win.isResizable()
+    try { if (!resizable) win.setResizable(true); win.setSize(width, height) }
+    finally { if (!resizable && !win.isDestroyed()) win.setResizable(false) }
+  }
   private position() {
     if (!this.win) return
     const area = screen.getPrimaryDisplay().workArea; const [width, height] = this.win.getSize(); const p = this.settings().position
@@ -65,13 +76,14 @@ export class NotificationWindows {
   private async show(notice: Notice) {
     clearTimeout(this.idle); const win = this.create(); const settings = this.settings()
     const area = screen.getPrimaryDisplay().workArea
-    const layout = notificationLayout(notice.content, settings.position, area.width, area.height)
-    const [, height] = win.getSize(); win.setSize(layout.width, Math.min(height, Math.max(1, area.height - 40))); this.position()
-    if (settings.glass && !this.native) await this.source()
+    const layout = notificationLayout(notice, settings.position, area.width, area.height)
+    const [, height] = win.getSize(); this.resize(layout.width, Math.min(height, Math.max(1, area.height - 40))); this.position()
+    const glass = usesGlass(settings)
+    if (glass && !this.native) await this.source()
     if (this.queue.active?.id !== notice.id || win.isDestroyed()) return
-    if (!settings.glass) this.destroyPanel()
+    if (!glass) this.destroyPanel()
     const display = screen.getPrimaryDisplay(); const [x, y] = win.getPosition()
-    this.delivery = { notice, position: settings.position, durationMs: settings.durationMs, layout, backdrop: { native: Boolean(this.native && settings.glass), sourceId: settings.glass && !this.native ? this.sourceId : undefined, width: display.size.width, height: display.size.height, winX: x - display.bounds.x, winY: y - display.bounds.y } }
+    this.delivery = { notice, position: settings.position, notificationStyle: settings.notificationStyle, durationMs: settings.durationMs, layout, backdrop: { native: Boolean(this.native && glass), sourceId: glass && !this.native ? this.sourceId : undefined, width: display.size.width, height: display.size.height, winX: x - display.bounds.x, winY: y - display.bounds.y } }
     if (this.ready) this.send()
     win.setIgnoreMouseEvents(false); win.showInactive(); win.setAlwaysOnTop(true, 'screen-saver'); this.armWatchdog(notice.id)
   }
@@ -94,7 +106,7 @@ export class NotificationWindows {
     try {
       if (this.panelDpr !== dpr) this.destroyPanel()
       if (!this.panel) {
-        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: 14 * dpr, blurSigma: 2 * dpr, displacementScale: 35, aberrationIntensity: .4, saturation: 1.2, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
+        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: glassAppearance.cornerRadius * dpr, blurSigma: 2 * dpr, displacementScale: glassAppearance.displacementScale, aberrationIntensity: glassAppearance.aberrationIntensity, saturation: glassAppearance.saturation / 100, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
         this.panelDpr = dpr
         if (!this.panel) throw new Error('原生玻璃不可用')
       } else { this.panel.setBounds(bounds); this.panel.setLumaBands(bands); this.panel.anchor(this.win) }

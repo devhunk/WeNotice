@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
     if (event.kind === 'pipe' && status.phase === 'listening') { status = { ...status, detail: event.connected ? '实时管道已连接，定时补查已开启' : '实时管道重连中，定时补查继续运行' }; publish() }
   })
   const launcher = join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'launcher', 'WeNotice.OpenWechat.exe')
-  wechat = new WechatNavigator(id => db.contact(id), target => runWechatHelper(launcher, target))
+  wechat = new WechatNavigator(target => runWechatHelper(launcher, target))
   // Generate a small RGBA tray icon locally; no external artwork dependency.
   const pixels = Buffer.alloc(32 * 32 * 4)
   for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const at = (y * 32 + x) * 4; const dot = (x - 16) ** 2 + (y - 16) ** 2 < 210; pixels[at] = 31; pixels[at + 1] = 118; pixels[at + 2] = 86; pixels[at + 3] = dot ? 255 : 0; if (dot && ((x >= 13 && x <= 18 && y >= 8 && y <= 20) || ((x - 15) ** 2 + (y - 24) ** 2 < 4))) pixels.fill(255, at, at + 3) }
