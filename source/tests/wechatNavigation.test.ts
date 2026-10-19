@@ -47,7 +47,9 @@ test('native helper watchdog exits while stdin is blocked, before any WeChat int
   const result = await new Promise<{ error: Error | null; stdout: string }>(resolveResult => {
     // Keep stdin open deliberately. Main cannot deserialize a target, so this
     // exercises the independent native watchdog without automating real WeChat.
-    execFile(resolve('resources/launcher/WeNotice.OpenWechat.exe'), [], { windowsHide: true, timeout: 9000, encoding: 'utf8' }, (error, stdout) => resolveResult({ error, stdout }))
+    // A fresh Windows CI runner may take several seconds to initialize the
+    // .NET Framework before Main starts its six-second watchdog.
+    execFile(resolve('resources/launcher/WeNotice.OpenWechat.exe'), [], { windowsHide: true, timeout: 25000, encoding: 'utf8' }, (error, stdout) => resolveResult({ error, stdout }))
   })
   assert.ok(result.error)
   const response = JSON.parse(result.stdout.trim())
