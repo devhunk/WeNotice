@@ -1,175 +1,66 @@
-// Adapted from hicccc77/WeFlow @ ad075f7983fcf5c217b0e305065a7298c005541a; see THIRD_PARTY_NOTICES.md.
-// Notification surface variables are provided by the desktop adaptive theme.
+// Adapted from WeFlow; WeChat palette references Tencent/weui light theme.
 .notice-avatar {
-  display: block;
-  width: 38px;
-  height: 38px;
-  border-radius: 9px;
-  object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+  display: block; width: 40px; height: 40px; border-radius: 4px;
+  object-fit: cover; flex-shrink: 0;
 }
-
 .notice-avatar.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #2bae67 0%, #07c160 100%);
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  display: flex; align-items: center; justify-content: center;
+  background: #07c160; color: #fff; font-size: 18px; font-weight: 500;
 }
-
 .notification-toast-container {
-  position: relative;
-  width: 100%;
-  padding: 8px;
-  opacity: 0;
-  transform: translateY(-3px);
-  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
-  pointer-events: none;
-
-  &.visible {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-
-  --liquid-glass-shadow: var(--noti-shadow, 0 0 0 1px rgba(17, 24, 39, 0.08), 0 4px 12px rgba(17, 24, 39, 0.12));
-  --liquid-glass-tint: var(--noti-tint, rgba(248, 249, 250, 0.88));
-  --liquid-glass-ring: 0.12;
-  color: var(--noti-title-color, #192027);
-
-  .notification-content {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    min-width: 0;
-  }
-
-  .notification-avatar-container {
-    position: relative;
-    flex-shrink: 0;
-    width: 38px;
-    height: 38px;
-  }
-
-  .notification-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .notification-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-height: 18px;
-    min-width: 0;
-  }
-
-  .notification-sender {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .notification-title {
-    font-size: 14px;
-    font-weight: 560;
-    line-height: 1.35;
-    color: var(--noti-title-color, #1f2329);
-    text-shadow: var(--noti-title-halo, none);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: 0;
-  }
-
-  .notification-meta {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-
-  .notification-time {
-    color: var(--noti-title-tertiary, #7b858e);
-    font-size: 10.5px;
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    opacity: 0.78;
-  }
-
-  .notification-unread {
-    color: #07c160;
-    font-size: 10.5px;
-    font-weight: 500;
-    line-height: 1;
-    opacity: 0.9;
-    white-space: nowrap;
-  }
-
-  .notification-close {
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    display: grid;
-    place-items: center;
-    background: transparent;
-    color: var(--noti-title-tertiary, #7b858e);
-    opacity: 0.25;
+  position: relative; width: 100%; padding: 10px; overflow: hidden;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  opacity: 0; transform: translateY(-3px); pointer-events: none;
+  transition: opacity .16s ease-out, transform .16s ease-out;
+  &.visible { opacity: 1; transform: none; pointer-events: auto; }
+  --liquid-glass-shadow: var(--noti-shadow, 0 0 0 1px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.12));
+  --liquid-glass-tint: var(--noti-tint, rgba(255,255,255,.28));
+  --liquid-glass-ring: .35;
+  .notification-solid {
+    padding: 12px 14px; border-radius: 14px; background: #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 3px 9px rgba(0,0,0,.08);
     cursor: pointer;
-    z-index: 2;
-    transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
-
-    &:hover {
-      background: var(--noti-close-hover-bg, rgba(0, 0, 0, 0.06));
-      color: var(--noti-title-color, #192027);
-      opacity: 1;
-    }
-    &:focus-visible {
-      outline: 2px solid currentColor;
-      outline-offset: -2px;
-      opacity: 1;
-    }
   }
-
+  .notification-content { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .notification-avatar-container { flex-shrink: 0; width: 40px; height: 40px; }
+  .notification-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .notification-header { display: flex; align-items: center; gap: 8px; min-height: 22px; min-width: 0; }
+  .notification-sender { display: flex; flex: 1; min-width: 0; }
+  .notification-title {
+    min-width: 0; font-size: 14px; font-weight: 500; line-height: 22px;
+    color: var(--noti-title-color, rgba(0,0,0,.9)); text-shadow: var(--noti-title-halo, none);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .notification-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .notification-time, .notification-unread {
+    color: var(--noti-title-tertiary, rgba(0,0,0,.55));
+    font-size: 11px; font-weight: 400; line-height: 16px;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .notification-close {
+    flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px;
+    border: 0; border-radius: 4px; margin: -1px -4px -1px 0; padding: 0;
+    background: transparent; color: var(--noti-title-tertiary, rgba(0,0,0,.55));
+    opacity: .65; cursor: pointer; z-index: 2;
+    &:hover { background: rgba(0,0,0,.05); opacity: 1; }
+    &:focus-visible { outline: 2px solid #07c160; outline-offset: -2px; opacity: 1; }
+  }
   .notification-body {
-    min-width: 0;
-    margin: 0;
-    color: var(--noti-body-color, #2b333a);
-    text-shadow: var(--noti-body-halo, none);
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.45;
-    letter-spacing: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: var(--noti-body-lines, 6);
-    line-clamp: var(--noti-body-lines, 6);
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    white-space: pre-line;
-
-    .inline-emoji {
-      display: inline-block;
-      width: 17px;
-      height: 17px;
-      vertical-align: -2.5px;
-      margin: 0 1.5px;
-    }
+    min-width: 0; margin: 0; color: var(--noti-body-color, rgba(0,0,0,.55));
+    text-shadow: var(--noti-body-halo, none); font-size: 14px; font-weight: 400; line-height: 22px;
+    display: -webkit-box; -webkit-line-clamp: var(--noti-body-lines, 10); line-clamp: var(--noti-body-lines, 10);
+    -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line;
+    .inline-emoji { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; margin: 0 1px; }
   }
+}
+.notification-style-wechat {
+  // Locally override adaptive glass colors, including when switching from a dark desktop.
+  --noti-title-color: rgba(0,0,0,.9); --noti-body-color: rgba(0,0,0,.55);
+  --noti-title-tertiary: rgba(0,0,0,.55); --noti-title-halo: none; --noti-body-halo: none;
+  .notification-solid { border-radius: 8px; }
+}
+.notification-style-glass {
+  .notice-avatar { border-radius: 10px; }
+  .notification-body { color: var(--noti-body-color, #2b333a); }
 }
 @media (prefers-reduced-motion: reduce) { .notification-toast-container { transition: none; animation: none !important; } }

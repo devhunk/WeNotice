@@ -1,5 +1,5 @@
 html[data-surface="notification"], [data-surface="notification"] body { margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif; }
 [data-surface="notification"] * { box-sizing: border-box; }
 .notification-toast-container { animation: notification-enter 0.16s ease-out; }
-.material-fallback { --liquid-glass-tint: rgba(249, 250, 251, .95); --noti-title-color: #1f2329; --noti-body-color: #2f3338; --noti-title-tertiary: #7e8894; --noti-title-halo: none; --noti-body-halo: none; }
+.notification-style-glass.material-fallback { --liquid-glass-tint: rgba(249, 250, 251, .95); --noti-title-color: #1f2329; --noti-body-color: #2f3338; --noti-title-tertiary: #7e8894; --noti-title-halo: none; --noti-body-halo: none; }
 @keyframes notification-enter { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }

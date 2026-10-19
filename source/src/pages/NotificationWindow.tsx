@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import NotificationContent from '../components/NotificationContent'
-import LiquidGlass from '../components/LiquidGlass'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import NotificationSurface from '../components/NotificationSurface'
 import { getLayoutRect, useNotificationAdaptiveTheme, useNotificationNativeAdaptiveTheme } from './useNotificationAdaptiveTheme'
 import type { Delivery } from '../../shared/types'
 import { notificationLayout } from '../../shared/notificationLayout'
+import { createNotificationMeasure } from '../utils/measureNotification'
 import '../components/NotificationToast.scss'
 import './NotificationWindow.scss'
 
@@ -15,6 +15,8 @@ export default function NotificationWindow() {
   const root = useRef<HTMLDivElement>(null)
   const api = window.electronAPI?.notification
   current.current = delivery
+  const measure = useMemo(createNotificationMeasure, [])
+  const layout = delivery ? notificationLayout(delivery.notice, delivery.position, (delivery.layout?.maxWidth ?? 460) + 40, (delivery.layout?.maxHeight ?? 320) + 40, measure) : null
   useEffect(() => {
     if (!api) return
     const remove = api.onShow(data => {
@@ -57,7 +59,7 @@ export default function NotificationWindow() {
     const element = root.current; let frame = 0, lastSize = '', lastGlass = ''
     const report = () => {
       if (current.current?.notice.id !== delivery.notice.id) return
-      const width = (delivery.layout || notificationLayout(delivery.notice.content, delivery.position)).width, height = element.offsetHeight
+      const width = layout!.width, height = element.offsetHeight
       const size = `${width}:${height}`
       if (size !== lastSize) { lastSize = size; api?.resize(delivery.notice.id, width, height) }
       const glass = element.querySelector<HTMLElement>('.liquid-glass')
@@ -74,12 +76,10 @@ export default function NotificationWindow() {
     frame = requestAnimationFrame(report); const timer = setTimeout(report, 150)
     const observer = new ResizeObserver(report); observer.observe(element)
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); observer.disconnect() }
-  }, [delivery?.notice.id, delivery?.backdrop.native, delivery?.backdrop.winX, delivery?.backdrop.winY, delivery?.position, api])
+  }, [delivery?.notice.id, delivery?.backdrop.native, delivery?.backdrop.winX, delivery?.backdrop.winY, delivery?.position, layout?.width, api])
   if (!delivery) return null
   const { notice } = delivery
-  return <div ref={root} id="notification-current" key={notice.id} style={{ '--noti-body-lines': delivery.layout?.maxBodyLines || 6 } as React.CSSProperties} className={`notification-toast-container ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
-    <LiquidGlass cornerRadius={12} padding="11px 12px" blurAmount={0} saturation={108} displacementScale={10} aberrationIntensity={.1} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(true)}>
-      <NotificationContent notice={notice} onClose={() => close()} />
-    </LiquidGlass>
+  return <div ref={root} id="notification-current" key={notice.id} style={{ width: layout!.width, maxHeight: layout!.maxHeight, '--noti-body-lines': layout!.maxBodyLines } as React.CSSProperties} className={`notification-toast-container notification-style-${delivery.notificationStyle} ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
+    <NotificationSurface notice={notice} notificationStyle={delivery.notificationStyle} glass={Boolean(stream || delivery.backdrop.native)} backdropImage={backdrop} stream={stream} native={delivery.backdrop.native} onClick={() => close(true)} onClose={() => close()} />
   </div>
 }

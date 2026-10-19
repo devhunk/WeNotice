@@ -10,6 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
+    "test:ui": "node scripts/check-notification-ui.cjs",
     "build": "npm run typecheck && node scripts/build.mjs",
     "start": "electron .",
     "dist:portable": "npm run build && node scripts/package-portable.mjs",
