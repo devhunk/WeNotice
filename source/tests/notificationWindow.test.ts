@@ -11,8 +11,10 @@ function fixture() {
   let captures = 0, settings: Settings = { ...defaults }
   class Window {
     size = [344, 86]; point = [0, 0]
+    resizable = false
     webContents = { mainFrame: {}, send: (_: string, value: Delivery) => deliveries.push(value), setWindowOpenHandler() {}, on() {}, setZoomFactor() {} }
-    getSize() { return this.size } setSize(w: number, h: number) { this.size = [w, h] }
+    getSize() { return this.size } setSize(w: number, h: number) { if (this.resizable) this.size = [w, h] }
+    isResizable() { return this.resizable } setResizable(value: boolean) { this.resizable = value }
     getPosition() { return this.point } setPosition(x: number, y: number) { this.point = [x, y] }
     isDestroyed() { return false } loadURL() { return Promise.resolve() }
     setContentProtection() {} setIgnoreMouseEvents() {} showInactive() {} setAlwaysOnTop() {} on() {} hide() {} destroy() {}
@@ -29,8 +31,26 @@ function fixture() {
   const windows = new mod.exports.NotificationWindows(() => settings, () => 'about:blank', () => {})
   const event = () => ({ sender: windows.win.webContents, senderFrame: windows.win.webContents.mainFrame })
   const send = (name: string, value?: unknown) => listeners.get(name)!(event(), value)
-  return { windows, panels, deliveries, captures: () => captures, send, update: (value: Partial<Settings>) => { settings = { ...settings, ...value } } }
+  return { windows, panels, deliveries, display, captures: () => captures, send, update: (value: Partial<Settings>) => { settings = { ...settings, ...value } } }
 }
+
+test('a short toast after a large toast shrinks the native window and keeps right/bottom margins', () => {
+  const f = fixture()
+  f.display.workArea = { x: 100, y: 50, width: 1920, height: 1080 }
+  f.update({ position: 'bottom-right' })
+  try {
+    f.windows.queue.push({ id: 'long', sessionId: 'friend', title: '好友', content: '长消息'.repeat(100), timestamp: 1, count: 1 })
+    f.send('notice:ready')
+    f.send('notice:resize', { id: 'long', width: 360, height: 290 })
+    assert.deepEqual([...f.windows.win.size], [360, 290])
+    f.windows.queue.close('long')
+    f.windows.queue.push({ id: 'short', sessionId: 'friend', title: '好友', content: '收到', timestamp: 2, count: 1 })
+    f.send('notice:resize', { id: 'short', width: 288, height: 92 })
+    assert.deepEqual([...f.windows.win.size], [288, 92])
+    assert.deepEqual([...f.windows.win.point], [100 + 1920 - 288 - 20, 50 + 1080 - 92 - 20])
+    assert.equal(f.windows.win.resizable, false)
+  } finally { f.windows.shutdown() }
+})
 
 test('WeChat style avoids capture and native panels; resize clamps measured dimensions and rejects stale IDs', () => {
   const f = fixture()

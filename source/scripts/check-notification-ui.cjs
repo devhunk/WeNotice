@@ -8,7 +8,7 @@ if (!process.versions.electron) {
   child.on('exit', code => { rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); process.exitCode = code ?? 1 })
 } else {
 // Deterministic renderer smoke test. No account access or desktop capture.
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, screen } = require('electron')
 const { mkdirSync, writeFileSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 const assert = require('node:assert/strict')
@@ -19,8 +19,8 @@ const temporary = process.argv.find(arg => arg.startsWith('--qa-profile=')).slic
 app.setPath('userData', join(temporary, 'profile'))
 app.disableHardwareAcceleration()
 const exportsFile = join(temporary, 'shared.cjs')
-buildSync({ stdin: { contents: "export { defaults } from './shared/types'; export { notificationLayout } from './shared/notificationLayout'", resolveDir: root }, bundle: true, platform: 'node', format: 'cjs', outfile: exportsFile })
-const { defaults, notificationLayout } = require(exportsFile)
+buildSync({ stdin: { contents: "export { defaults } from './shared/types'; export { notificationLayout, notificationMetrics } from './shared/notificationLayout'", resolveDir: root }, bundle: true, platform: 'node', format: 'cjs', outfile: exportsFile })
+const { defaults, notificationLayout, notificationMetrics } = require(exportsFile)
 const results = [], errors = []
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 const geometry = `(() => {
@@ -109,6 +109,37 @@ async function settings() {
     results.push({ name: 'settings', wechat, glassRadius, saveRoundtrip: true })
   } finally { win.destroy() }
 }
+async function positioning() {
+  const moduleFile = join(temporary, 'notification-window.cjs')
+  require('node:fs').copyFileSync(join(root, 'dist-electron/notificationPreload.cjs'), join(temporary, 'notificationPreload.cjs'))
+  buildSync({ entryPoints: [join(root, 'electron/windows/notificationWindow.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: moduleFile, external: ['electron', '@hicccc77/electron-liquid-glass'] })
+  const { NotificationWindows } = require(moduleFile)
+  let currentSettings = { ...defaults, notificationStyle: 'wechat' }
+  const windows = new NotificationWindows(() => currentSettings, route => require('node:url').pathToFileURL(join(root, 'dist/index.html')).href + '#' + route, () => {})
+  try {
+    for (const position of ['top-right', 'bottom-right', 'top-left', 'bottom-left', 'top-center']) {
+      currentSettings = { ...currentSettings, position }
+      for (const [kind, content] of [['long', '较长通知内容'.repeat(35)], ['short', '收到']]) {
+        const id = `position-${position}-${kind}`
+        windows.queue.push({ id, sessionId: 'fixture', title: '位置测试', content, timestamp: 1781682600, count: 1 })
+        await pause(500)
+        const win = windows.win, bounds = win.getBounds(), area = screen.getPrimaryDisplay().workArea
+        const data = await win.webContents.executeJavaScript(geometry)
+        const edges = { left: bounds.x + data.card.x - area.x, right: area.x + area.width - bounds.x - data.card.right, top: bounds.y + data.card.y - area.y, bottom: area.y + area.height - bounds.y - data.card.bottom }
+        assert.equal(bounds.width, Math.ceil(data.root.width), 'native window must shrink to the rendered toast width')
+        assert.equal(bounds.height, Math.ceil(data.root.height), 'native window must shrink to the rendered toast height')
+        assert.equal(win.isResizable(), false, 'toast must remain non-resizable after measurement')
+        const margin = notificationMetrics.margin + notificationMetrics.gutter
+        assert.ok(Math.abs(edges[position.startsWith('bottom') ? 'bottom' : 'top'] - margin) <= 1, 'vertical card margin must stay constant')
+        if (position === 'top-center') assert.ok(Math.abs(edges.left - edges.right) <= 1, 'short and long toasts must stay centered')
+        else assert.ok(Math.abs(edges[position.endsWith('left') ? 'left' : 'right'] - margin) <= 1, 'horizontal card margin must stay constant')
+        console.log(JSON.stringify({ id, bounds, card: data.card, edges }))
+        results.push({ name: id, bounds, card: data.card, edges })
+        windows.queue.close(id)
+      }
+    }
+  } finally { windows.shutdown() }
+}
 app.whenReady().then(async () => {
   mkdirSync(output, { recursive: true })
   try {
@@ -121,6 +152,7 @@ app.whenReady().then(async () => {
     await toast('wechat-small-screen', 'https://example.com/' + 'long-path-'.repeat(80), 'wechat', { title: '长标题测试会话名称', count: 99, availableWidth: 320, availableHeight: 200 })
     await toast('glass-fallback', '玻璃不可用时自动回退普通材质。', 'glass')
     await settings()
+    await positioning()
     assert.deepEqual(errors, [])
     writeFileSync(join(output, 'results.json'), JSON.stringify({ results, errors }, null, 2))
     console.log(JSON.stringify({ checks: results.length, output, errors }))

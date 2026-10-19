@@ -28,7 +28,7 @@ export class NotificationWindows {
       const width = Math.max(Math.min(288, layout.maxWidth), Math.min(layout.maxWidth, Math.ceil(data.width)))
       const maxHeight = Math.max(1, Math.min(320, area.height - 40))
       const height = Math.max(1, Math.min(maxHeight, Math.ceil(data.height)))
-      if (this.win) { const [w, h] = this.win.getSize(); if (w !== width || h !== height) this.win.setSize(width, height); this.position(); this.refreshBackdropCoordinates() }
+      if (this.win) { this.resize(width, height); this.position(); this.refreshBackdropCoordinates() }
     })
     ipcMain.on('notice:glassRect', (event, payload) => { if (allowed(event) && payload?.id === this.queue.active?.id) this.glassRect(payload) })
     ipcMain.on('notice:glassHide', (event, id) => { if (allowed(event) && id === this.queue.active?.id) this.panel?.hide(240) })
@@ -50,6 +50,15 @@ export class NotificationWindows {
     void win.loadURL(this.url('/notification')).catch(() => { if (this.queue.active) this.queue.close(this.queue.active.id) })
     return win
   }
+  private resize(width: number, height: number) {
+    const win = this.win; if (!win) return
+    const [w, h] = win.getSize(); if (w === width && h === height) return
+    // Windows can retain the previous size constraints on a non-resizable
+    // toolbar. Temporarily release them so a shorter toast can shrink too.
+    const resizable = win.isResizable()
+    try { if (!resizable) win.setResizable(true); win.setSize(width, height) }
+    finally { if (!resizable && !win.isDestroyed()) win.setResizable(false) }
+  }
   private position() {
     if (!this.win) return
     const area = screen.getPrimaryDisplay().workArea; const [width, height] = this.win.getSize(); const p = this.settings().position
@@ -68,7 +77,7 @@ export class NotificationWindows {
     clearTimeout(this.idle); const win = this.create(); const settings = this.settings()
     const area = screen.getPrimaryDisplay().workArea
     const layout = notificationLayout(notice, settings.position, area.width, area.height)
-    const [, height] = win.getSize(); win.setSize(layout.width, Math.min(height, Math.max(1, area.height - 40))); this.position()
+    const [, height] = win.getSize(); this.resize(layout.width, Math.min(height, Math.max(1, area.height - 40))); this.position()
     const glass = usesGlass(settings)
     if (glass && !this.native) await this.source()
     if (this.queue.active?.id !== notice.id || win.isDestroyed()) return

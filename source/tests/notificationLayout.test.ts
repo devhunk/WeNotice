@@ -8,10 +8,10 @@ import { defaults } from '../shared/types'
 import { usesGlass } from '../shared/notificationAppearance'
 
 test('toast expands for longer content and stays within the available work area', () => {
-  const short = notificationLayout('好的', 'top-right'), medium = notificationLayout('请大家明天下午三点准时到会议室讨论设计方案', 'top-right'), long = notificationLayout('长消息'.repeat(100), 'top-right')
+  const short = notificationLayout('好的', 'top-right'), medium = notificationLayout('请明天下午三点到会议室讨论', 'top-right'), long = notificationLayout('长消息'.repeat(100), 'top-right')
   assert.ok(short.width < medium.width && medium.width < long.width)
-  assert.equal(long.width, 460)
-  assert.ok(notificationLayout('长消息'.repeat(100), 'top-center').width <= 420)
+  assert.equal(long.width, 360)
+  assert.equal(notificationLayout('长消息'.repeat(100), 'top-center').width, 344)
   const constrained = notificationLayout('长消息'.repeat(100), 'top-right', 320, 200)
   assert.ok(constrained.width <= 280)
   assert.ok(constrained.maxBodyLines < long.maxBodyLines)
@@ -25,6 +25,7 @@ test('header metadata contributes to width and every position respects small wor
     for (const width of [180, 320, 1920]) {
       const layout = notificationLayout(long, position, width, 180)
       assert.ok(layout.width > 0 && layout.width <= width - 40)
+      assert.ok(layout.width <= (position === 'top-center' ? 344 : 360))
       assert.ok(layout.maxHeight <= 140)
       assert.ok(layout.maxBodyLines >= 1)
     }
@@ -34,7 +35,7 @@ test('header metadata contributes to width and every position respects small wor
 test('layout accepts actual font measurements and handles very many explicit lines', () => {
   const notice = { title: '标题', content: '[微笑]内容', count: 8 }
   const measured = notificationLayout(notice, 'top-right', 1920, 1080, (text, kind) => text.length * (kind === 'body' ? 100 : 10))
-  assert.equal(measured.width, 460)
+  assert.equal(measured.width, 360)
   assert.doesNotThrow(() => notificationLayout('\n'.repeat(150000), 'top-right'))
 })
 

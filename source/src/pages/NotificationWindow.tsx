@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NotificationSurface from '../components/NotificationSurface'
 import { getLayoutRect, useNotificationAdaptiveTheme, useNotificationNativeAdaptiveTheme } from './useNotificationAdaptiveTheme'
 import type { Delivery } from '../../shared/types'
-import { notificationLayout } from '../../shared/notificationLayout'
+import { notificationLayout, notificationMetrics } from '../../shared/notificationLayout'
 import { createNotificationMeasure } from '../utils/measureNotification'
 import '../components/NotificationToast.scss'
 import './NotificationWindow.scss'
@@ -16,7 +16,7 @@ export default function NotificationWindow() {
   const api = window.electronAPI?.notification
   current.current = delivery
   const measure = useMemo(createNotificationMeasure, [])
-  const layout = delivery ? notificationLayout(delivery.notice, delivery.position, (delivery.layout?.maxWidth ?? 460) + 40, (delivery.layout?.maxHeight ?? 320) + 40, measure) : null
+  const layout = delivery ? notificationLayout(delivery.notice, delivery.position, (delivery.layout?.maxWidth ?? notificationMetrics.maxWidth) + 40, (delivery.layout?.maxHeight ?? notificationMetrics.maxHeight) + 40, measure) : null
   useEffect(() => {
     if (!api) return
     const remove = api.onShow(data => {
