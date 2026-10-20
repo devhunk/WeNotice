@@ -4,6 +4,7 @@ import LiquidGlass from '../components/LiquidGlass'
 import { getLayoutRect, useNotificationAdaptiveTheme, useNotificationNativeAdaptiveTheme } from './useNotificationAdaptiveTheme'
 import type { Delivery } from '../../shared/types'
 import { notificationLayout } from '../../shared/notificationLayout'
+import { notificationStyle } from '../../shared/notificationStyle'
 import '../components/NotificationToast.scss'
 import './NotificationWindow.scss'
 
@@ -13,6 +14,7 @@ export default function NotificationWindow() {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const current = useRef<Delivery | null>(null), exitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const root = useRef<HTMLDivElement>(null)
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), remaining = useRef(0), deadline = useRef(0), hovered = useRef(false)
   const api = window.electronAPI?.notification
   current.current = delivery
   useEffect(() => {
@@ -35,9 +37,17 @@ export default function NotificationWindow() {
   useEffect(() => {
     clearTimeout(exitTimer.current); exitTimer.current = undefined; setClosing(false)
     if (!delivery) return
-    const timer = setTimeout(() => close(), delivery.durationMs)
-    return () => { clearTimeout(timer); clearTimeout(exitTimer.current); exitTimer.current = undefined }
+    hovered.current = false; remaining.current = delivery.durationMs; deadline.current = Date.now() + remaining.current
+    dismissTimer.current = setTimeout(() => close(), remaining.current)
+    return () => { clearTimeout(dismissTimer.current); clearTimeout(exitTimer.current); exitTimer.current = undefined }
   }, [delivery?.notice.id, close])
+  const hover = (paused: boolean) => {
+    if (!delivery?.behavior.pauseOnHover || hovered.current === paused || closing) return
+    hovered.current = paused; clearTimeout(dismissTimer.current)
+    if (paused) remaining.current = Math.max(0, deadline.current - Date.now())
+    else { deadline.current = Date.now() + remaining.current; dismissTimer.current = setTimeout(() => close(), remaining.current) }
+    api?.hover(delivery.notice.id, paused)
+  }
   useEffect(() => {
     if (!delivery?.backdrop.sourceId || delivery.backdrop.native) { setStream(null); return }
     let cancelled = false; let owned: MediaStream | undefined
@@ -50,8 +60,8 @@ export default function NotificationWindow() {
     return () => { cancelled = true; owned?.getTracks().forEach(track => track.stop()); document.removeEventListener('visibilitychange', stopHidden); setStream(null) }
   }, [delivery?.notice.id, delivery?.backdrop.sourceId, delivery?.backdrop.native])
   const backdrop = delivery ? { width: delivery.backdrop.width, height: delivery.backdrop.height, screenX: delivery.backdrop.winX, screenY: delivery.backdrop.winY } : undefined
-  useNotificationAdaptiveTheme(stream, backdrop)
-  useNotificationNativeAdaptiveTheme(Boolean(delivery?.backdrop.native))
+  useNotificationAdaptiveTheme(delivery?.appearance.theme === 'auto' ? stream : null, backdrop)
+  useNotificationNativeAdaptiveTheme(Boolean(delivery?.backdrop.native && delivery.appearance.theme === 'auto'))
   useEffect(() => {
     if (!delivery || !root.current) return
     const element = root.current; let frame = 0, lastSize = '', lastGlass = ''
@@ -77,9 +87,9 @@ export default function NotificationWindow() {
   }, [delivery?.notice.id, delivery?.backdrop.native, delivery?.backdrop.winX, delivery?.backdrop.winY, delivery?.position, api])
   if (!delivery) return null
   const { notice } = delivery
-  return <div ref={root} id="notification-current" key={notice.id} style={{ '--noti-body-lines': delivery.layout?.maxBodyLines || 6 } as React.CSSProperties} className={`notification-toast-container ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
-    <LiquidGlass cornerRadius={14} padding="12px 14px" blurAmount={0} saturation={120} displacementScale={35} aberrationIntensity={.4} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(true)}>
-      <NotificationContent notice={notice} onClose={() => close()} />
+  return <div ref={root} id="notification-current" key={notice.id} onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} style={{ ...notificationStyle(delivery.appearance), '--noti-body-lines': delivery.layout?.maxBodyLines || 6 } as React.CSSProperties} className={`notification-toast-container ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
+    <LiquidGlass cornerRadius={delivery.appearance.radius} padding={`${delivery.appearance.padding}px`} blurAmount={0} saturation={120} displacementScale={35} aberrationIntensity={.4} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(delivery.behavior.clickAction === 'open')}>
+      <NotificationContent notice={notice} appearance={delivery.appearance} onClose={() => close()} />
     </LiquidGlass>
   </div>
 }

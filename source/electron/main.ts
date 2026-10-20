@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
@@ -10,6 +10,7 @@ import { DataClient } from './data/client'
 import { MessageMonitor } from './core/monitor'
 import { NotificationWindows } from './windows/notificationWindow'
 import { WechatNavigator, runWechatHelper } from './core/wechatNavigation'
+import { connectionChanged } from '../shared/preferences'
 import type { AutoProgress, DbConfig, Notice, PublicState, Status } from '../shared/types'
 
 app.setName('WeNotice')
@@ -24,7 +25,7 @@ let operations = Promise.resolve()
 let autoController: AbortController | undefined, autoProgress: AutoProgress | null = null
 const serialized = <T>(work: () => Promise<T>): Promise<T> => { const next = operations.then(work, work); operations = next.then(() => {}, () => {}); return next }
 const url = (route: string) => `${process.env.WENOTICE_DEV_URL || pathToFileURL(join(__dirname, '../dist/index.html')).href}#${route}`
-const state = (): PublicState => ({ settings: store.settings, hasKey: store.hasKey, status, history, autoProgress })
+const state = (): PublicState => ({ settings: store.settings, hasKey: store.hasKey, status, history, autoProgress, settingsWarning: store.loadWarning })
 function progress(value: AutoProgress | null) {
   autoProgress = value
   if (value) status = { phase: 'connecting', detail: value.detail }
@@ -44,7 +45,7 @@ function updateTray() {
 }
 function showSettings() {
   if (settingsWindow && !settingsWindow.isDestroyed()) { settingsWindow.show(); settingsWindow.focus(); return }
-  const win = new BrowserWindow({ title: 'WeNotice', width: 1040, height: 790, minWidth: 850, minHeight: 640, backgroundColor: '#f7f8fa', autoHideMenuBar: true, webPreferences: { preload: join(__dirname, 'settingsPreload.cjs'), contextIsolation: true, nodeIntegration: false } })
+  const win = new BrowserWindow({ title: 'WeNotice', width: 1120, height: 800, minWidth: 850, minHeight: 640, backgroundColor: '#faf9f5', autoHideMenuBar: true, webPreferences: { preload: join(__dirname, 'settingsPreload.cjs'), contextIsolation: true, nodeIntegration: false } })
   settingsWindow = win; win.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); win.webContents.on('will-navigate', event => event.preventDefault())
   win.on('closed', () => { if (settingsWindow === win) settingsWindow = null })
   void win.loadURL(url('/settings'))
@@ -53,7 +54,7 @@ async function pause() {
   epoch++; clearTimeout(reconnectTimer); reconnectTimer = undefined; monitor?.stop(); monitor = null; windows.queue.clear()
   await db.close(); status = { phase: 'paused', detail: '监听已暂停' }; publish()
 }
-function notify(notice: Notice) { history = [notice, ...history].slice(0, 100); windows.queue.push(notice); publish() }
+function notify(notice: Notice) { history = [notice, ...history].slice(0, store.settings.behavior.historyLimit); windows.enqueue(notice); publish() }
 function testNotice() { notify({ id: randomUUID(), sessionId: '__test__', title: 'WeNotice', content: '通知已准备好。收到微信新消息时，将在这里提醒你。', timestamp: Math.floor(Date.now() / 1000), count: 1, test: true }) }
 async function openNoticeConversation(notice: Notice) {
   const result = await wechat.open(notice)
@@ -117,15 +118,20 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:state', event => { guard(event); return state() })
   ipcMain.handle('app:save', (event, settings, key) => {
     guard(event); requireNoAutoConnect(); return serialized(async () => {
-      const restart = status.phase === 'listening'; store.save(settings, key)
+      const before = store.settings, running = Boolean(monitor), next = validateSettings(settings)
+      const restart = connectionChanged(before, next, key); store.save(next, key)
       app.setLoginItemSettings({ openAtLogin: store.settings.launchAtLogin, args: ['--background'] })
-      await pause(); if (restart && store.settings.enabled) await start(); publish(); return state()
+      if (running && !next.enabled) await pause()
+      else if (restart && running) await start()
+      else if (before.pollSeconds !== next.pollSeconds) monitor?.updatePollInterval()
+      history = history.slice(0, next.behavior.historyLimit); windows.preferencesChanged(); publish(); return state()
     })
   })
   ipcMain.handle('app:choose', async (event, kind) => {
     guard(event); if (kind !== 'directory' && kind !== 'library') throw new Error('选择类型错误')
     const result = await dialog.showOpenDialog(settingsWindow!, kind === 'directory' ? { properties: ['openDirectory'] } : { properties: ['openFile'], filters: [{ name: '兼容组件', extensions: ['dll'] }] }); return result.canceled ? null : result.filePaths[0]
   })
+  ipcMain.handle('app:displays', event => { guard(event); return screen.getAllDisplays().map((d, i) => ({ id: String(d.id), label: d.label || `屏幕 ${i + 1} · ${d.size.width} × ${d.size.height}`, workArea: { width: d.workArea.width, height: d.workArea.height } })) })
   ipcMain.handle('app:detectAccounts', async (event, directory) => {
     guard(event)
     if (directory !== undefined && (typeof directory !== 'string' || directory.length > 4096)) throw new Error('账号目录无效')
@@ -176,8 +182,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:start', event => { guard(event); requireNoAutoConnect(); return serialized(start) })
   ipcMain.handle('app:pause', event => { guard(event); requireNoAutoConnect(); return serialized(pause) })
   ipcMain.handle('app:test', event => { guard(event); testNotice() })
-  if (!process.argv.includes('--background') || !store.hasKey) showSettings()
-  if (store.hasKey && store.settings.enabled) await serialized(start)
+  if (!process.argv.includes('--background') || !store.hasKey || store.loadWarning) showSettings()
+  if (store.hasKey && store.settings.enabled && !store.loadWarning) await serialized(start)
 })
 app.on('window-all-closed', () => { /* Tray owns lifetime, including notification idle destruction. */ })
 app.on('before-quit', event => {

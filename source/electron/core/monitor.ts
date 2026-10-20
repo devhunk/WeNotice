@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Contact, Message, Notice, Session, Settings } from '../../shared/types'
+import { evaluateNotification, messageContext } from '../../shared/notificationPolicy'
 export interface MessageSource { sessions(): Promise<Session[]>; messages(id: string, since: number): Promise<Message[]>; contact(id: string): Promise<Contact> }
 const fallbackContact = (id: string): Contact => ({ name: id, muted: false, folded: false, statusKnown: false })
 export class MessageMonitor {
@@ -25,10 +26,11 @@ export class MessageMonitor {
       }
     }
     if (!this.valid(epoch)) return
-    this.poll = setInterval(() => this.request(), this.settings().pollSeconds * 1000)
+    this.updatePollInterval()
     this.onCheck()
   }
   stop() { this.epoch++; this.active = false; this.pending = false; this.scheduledAt = 0; clearTimeout(this.timer); clearInterval(this.poll); this.timer = undefined; this.poll = undefined }
+  updatePollInterval() { clearInterval(this.poll); if (this.active) this.poll = setInterval(() => this.request(), this.settings().pollSeconds * 1000) }
   private valid(epoch: number) { return this.active && epoch === this.epoch }
   request() {
     if (!this.active) return
@@ -59,12 +61,13 @@ export class MessageMonitor {
         if (candidates.some(m => m.outgoing !== true)) {
           contact = await this.getContact(session.id)
           if (!this.valid(epoch)) return
-          if (this.settings().respectMuted && !contact.statusKnown) throw new Error('无法读取会话免打扰状态。请检查组件，或在设置中关闭“遵循微信免打扰”。')
         }
         for (const message of candidates) {
           if (!this.valid(epoch)) return
+          const policy = evaluateNotification(this.settings(), messageContext(session.id, message.content, contact, message.outgoing), new Date(this.now()))
+          if (policy.retry) throw new Error(policy.reason)
           this.seen.set(message.id, { sessionId: session.id, timestamp: message.timestamp })
-          if (!this.allowed(session.id, contact) || message.outgoing === true) continue
+          if (!policy.allowed) continue
           // Unknown direction is not enough evidence to announce an incoming message.
           if (message.outgoing === null) continue
           let body = message.content
@@ -74,7 +77,7 @@ export class MessageMonitor {
             if (!this.valid(epoch)) return
             body = `${sender}: ${body}`
           }
-          this.deliver({ id: randomUUID(), sessionId: session.id, title: contact.name, avatarUrl: contact.avatarUrl, content: body, timestamp: message.timestamp, count: 1 })
+          this.deliver({ id: randomUUID(), sessionId: session.id, title: contact.name, avatarUrl: contact.avatarUrl, content: body, timestamp: message.timestamp, count: 1, context: { rawContent: message.content, muted: contact.muted, folded: contact.folded, statusKnown: contact.statusKnown, outgoing: message.outgoing } })
         }
         if (!this.valid(epoch)) return
         this.watermarks.set(session.id, messages.reduce((latest, message) => Math.max(latest, message.timestamp), previous))
@@ -86,12 +89,6 @@ export class MessageMonitor {
       this.onCheck()
     } catch (error) { if (this.valid(epoch)) this.onError(error instanceof Error ? error : new Error('消息读取失败')) }
     finally { this.busy = false; if (this.pending && this.active) { this.pending = false; this.request() } }
-  }
-  private allowed(id: string, contact: Contact) {
-    const settings = this.settings()
-    if (!settings.enabled || contact.folded || (settings.respectMuted && contact.muted)) return false
-    const included = settings.filterIds.includes(id)
-    return settings.filterMode === 'all' || (settings.filterMode === 'whitelist' ? included : !included)
   }
   private async getContact(id: string) {
     const cached = this.contacts.get(id)

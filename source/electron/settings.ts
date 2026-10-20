@@ -1,25 +1,26 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defaults, type Settings, type DbConfig } from '../shared/types'
 import { configuredAccountId } from '../shared/accountIdentity'
-const positions = ['top-right', 'bottom-right', 'top-left', 'bottom-left', 'top-center']
-export function validateSettings(input: unknown): Settings {
-  if (!input || typeof input !== 'object') throw new Error('设置格式错误')
-  const raw = input as Settings
-  for (const key of ['accountDir', 'accountId', 'libraryPath', 'keyLibraryPath'] as const) if (typeof raw[key] !== 'string' || raw[key].length > 4096) throw new Error('账号或组件路径格式错误')
-  if (!positions.includes(raw.position) || !['all', 'whitelist', 'blacklist'].includes(raw.filterMode)) throw new Error('通知设置无效')
-  if (!Array.isArray(raw.filterIds) || raw.filterIds.length > 2000 || raw.filterIds.some(id => typeof id !== 'string' || id.length > 256)) throw new Error('会话名单格式错误')
-  if (![raw.enabled, raw.launchAtLogin, raw.respectMuted, raw.glass].every(v => typeof v === 'boolean')) throw new Error('开关设置格式错误')
-  if (!Number.isFinite(raw.durationMs) || raw.durationMs < 2000 || raw.durationMs > 30000) throw new Error('显示时长必须在 2–30 秒之间')
-  if (!Number.isFinite(raw.pollSeconds) || raw.pollSeconds < 2 || raw.pollSeconds > 60) throw new Error('补查间隔必须在 2–60 秒之间')
-  return { accountDir: raw.accountDir.trim(), accountId: configuredAccountId(raw.accountDir.trim(), raw.accountId.trim()), libraryPath: raw.libraryPath.trim(), keyLibraryPath: raw.keyLibraryPath.trim(), enabled: raw.enabled, launchAtLogin: raw.launchAtLogin, respectMuted: raw.respectMuted, glass: raw.glass, position: raw.position, filterMode: raw.filterMode, filterIds: [...new Set(raw.filterIds.map(x => x.trim()).filter(Boolean))], durationMs: Math.round(raw.durationMs), pollSeconds: Math.round(raw.pollSeconds) }
-}
+import { validateSettings } from '../shared/preferences'
+export { validateSettings } from '../shared/preferences'
 export class SettingsStore {
-  settings = { ...defaults }; private encryptedKey = ''; private path: string
+  settings = structuredClone(defaults); loadWarning = ''; private encryptedKey = ''; private path: string
   constructor() {
     const directory = app.getPath('userData'); mkdirSync(directory, { recursive: true }); this.path = join(directory, 'settings.json')
-    if (existsSync(this.path)) { try { const saved = JSON.parse(readFileSync(this.path, 'utf8')); this.settings = validateSettings({ ...defaults, ...saved.settings }); this.encryptedKey = typeof saved.encryptedKey === 'string' ? saved.encryptedKey : '' } catch { /* show fresh settings instead of failing app launch */ } }
+    if (existsSync(this.path)) {
+      try {
+        const saved = JSON.parse(readFileSync(this.path, 'utf8'))
+        if (saved.settings?.schemaVersion !== 2 && !existsSync(this.path + '.pre-0.2.0.bak')) copyFileSync(this.path, this.path + '.pre-0.2.0.bak')
+        this.encryptedKey = typeof saved.encryptedKey === 'string' ? saved.encryptedKey : ''
+        this.settings = validateSettings(saved.settings)
+      } catch {
+        const backup = this.path + '.invalid.bak'
+        if (!existsSync(backup)) copyFileSync(this.path, backup)
+        this.loadWarning = '本地设置无法读取，原文件已备份。请检查并重新配置连接。'
+      }
+    }
     const bundled = join(app.isPackaged ? process.resourcesPath : app.getAppPath() + '/resources', 'wcdb', 'win32', 'x64', 'wcdb_api.dll')
     const previous = this.settings.libraryPath.replace(/\\/g, '/').toLowerCase()
     // Upgrade the known 0.1.0 WeFlow path; retain deliberately selected custom providers.
@@ -37,7 +38,7 @@ export class SettingsStore {
     }
     const temporary = this.path + '.tmp'
     writeFileSync(temporary, JSON.stringify({ settings, encryptedKey }, null, 2), { mode: 0o600 }); renameSync(temporary, this.path)
-    this.settings = settings; this.encryptedKey = encryptedKey
+    this.settings = settings; this.encryptedKey = encryptedKey; this.loadWarning = ''
   }
   connection(): DbConfig {
     if (!this.encryptedKey || !safeStorage.isEncryptionAvailable()) throw new Error('请先配置数据库密钥。')

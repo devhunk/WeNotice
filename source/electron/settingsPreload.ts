@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SettingsAPI } from '../shared/types'
 const api: SettingsAPI = {
+  displays: () => ipcRenderer.invoke('app:displays'),
   detectAccounts: directory => ipcRenderer.invoke('app:detectAccounts', directory),
   autoConnect: settings => ipcRenderer.invoke('app:autoConnect', settings), cancelAutoConnect: () => ipcRenderer.invoke('app:cancelAutoConnect'),
   onAutoProgress: cb => { const listener = (_: unknown, progress: any) => cb(progress); ipcRenderer.on('app:autoProgress', listener); return () => ipcRenderer.removeListener('app:autoProgress', listener) },

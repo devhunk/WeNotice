@@ -1,6 +1,6 @@
 {
   "name": "wenotice",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "private": true,
   "description": "独立的微信桌面通知应用",
   "author": "WeNotice contributors; derived notification visuals by WeFlow contributors",
@@ -10,6 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
+    "check:ui": "node scripts/check-customization.mjs",
     "build": "npm run typecheck && node scripts/build.mjs",
     "start": "electron .",
     "dist:portable": "npm run build && node scripts/package-portable.mjs",

@@ -1,35 +1,40 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Bell, Check, ChevronDown, ChevronRight, Copy, FolderOpen, Info, LoaderCircle, MessageCircle, Monitor, Pause, Play, Radio, Search, Settings2, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
-import { defaults, type AccountCandidate, type AutoProgress, type Notice, type PublicState, type Settings } from '../../shared/types'
-import NotificationContent, { NoticeAvatar } from '../components/NotificationContent'
+import { defaults, type AccountCandidate, type AutoProgress, type PublicState, type Settings } from '../../shared/types'
+import { NoticeAvatar } from '../components/NotificationContent'
 import '../components/NotificationToast.scss'
-import { notificationLayout } from '../../shared/notificationLayout'
 import './SettingsPage.scss'
+import { AppearanceControls, BehaviorControls, RulesControls, NotificationPreview, Group, Field, Toggle } from './Customization'
+import { defaultAppearance, type DisplayInfo } from '../../shared/types'
+import { presentation } from '../../shared/notificationPolicy'
+import { validateSettings } from '../../shared/preferences'
+import { PanelLeftClose, PanelLeftOpen, Palette, Workflow } from 'lucide-react'
 
-type Tab = 'overview' | 'connection' | 'notification'
+type Tab = 'overview' | 'connection' | 'appearance' | 'behavior' | 'rules'
 const labels = { idle: '尚未连接', connecting: '正在连接', listening: '正在监听', paused: '已暂停', error: '连接异常' }
-const navigation = [{ id: 'overview', title: '概览', icon: Radio }, { id: 'connection', title: '微信连接', icon: MessageCircle }, { id: 'notification', title: '通知设置', icon: SlidersHorizontal }] as const
-const pageText = { overview: ['概览', '查看运行状态和最近收到的消息。'], connection: ['微信连接', '配置本机账号，连接后即可在后台接收通知。'], notification: ['通知设置', '调整提醒方式，右侧即时查看效果。'] }
-const positions = [{ id: 'top-left', title: '左上角' }, { id: 'top-center', title: '顶部居中' }, { id: 'top-right', title: '右上角' }, { id: 'bottom-left', title: '左下角' }, { id: 'bottom-right', title: '右下角' }] as const
-const previewNotice: Notice = { id: 'preview', sessionId: '__test__', title: '文件传输助手', content: '文件已收到，记得查看最新的项目资料。', timestamp: 1781682600, count: 1 }
+const navigation = [{ id: 'overview', title: '概览', icon: Radio }, { id: 'connection', title: '微信连接', icon: MessageCircle }, { id: 'appearance', title: '通知外观', icon: Palette }, { id: 'behavior', title: '通知行为', icon: SlidersHorizontal }, { id: 'rules', title: '通知规则', icon: Workflow }] as const
+const pageText = { overview: ['概览', '查看运行状态和最近收到的消息。'], connection: ['微信连接', '配置本机账号，连接后即可在后台接收通知。'], appearance: ['通知外观', '让每一条提醒，都适合你的桌面。'], behavior: ['通知行为', '决定何时出现，以及如何与你交互。'], rules: ['通知规则', '为不同会话和消息，设置恰当的提醒方式。'] }
 
-function SettingRow({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-  return <div className="setting-row"><div className="setting-copy"><strong>{title}</strong>{description && <p>{description}</p>}</div>{children}</div>
-}
 
 export default function SettingsPage() {
+  const api = window.weNotice
   const [state, setState] = useState<PublicState>({ settings: defaults, hasKey: false, status: { phase: 'idle', detail: '配置账号后开始监听' }, history: [] })
   const [form, setForm] = useState<Settings>(defaults)
   const [key, setKey] = useState(''), [tab, setTab] = useState<Tab>('overview')
   const [error, setError] = useState(''), [feedback, setFeedback] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+  const [displays, setDisplays] = useState<DisplayInfo[]>([])
+  useEffect(() => { api?.displays().then(setDisplays).catch(() => {}) }, [])
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => { document.documentElement.dataset.theme = form.ui.theme === 'system' ? (media.matches ? 'dark' : 'light') : form.ui.theme }
+    apply(); media.addEventListener('change', apply); return () => media.removeEventListener('change', apply)
+  }, [form.ui.theme])
   const [accounts, setAccounts] = useState<AccountCandidate[]>([]), [autoProgress, setAutoProgress] = useState<AutoProgress | null>(null)
   const [autoPending, setAutoPending] = useState(false)
-  const api = window.weNotice
   const dirty = JSON.stringify(form) !== JSON.stringify(state.settings) || key.length > 0
   const connected = state.status.phase === 'listening'
   const account = state.settings.accountId || state.settings.accountDir.split(/[\\/]/).filter(Boolean).at(-1) || '未配置账号'
-  const previewLayout = notificationLayout(previewNotice.content, form.position)
   const history = state.history.filter(notice => `${notice.title} ${notice.content} ${notice.sessionId}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
 
   useEffect(() => {
@@ -48,7 +53,7 @@ export default function SettingsPage() {
     finally { setBusy(false) }
   }
   const persist = async () => {
-    const value = await api.save({ ...form, filterIds: form.filterIds.map(id => id.trim()).filter(Boolean) }, key || undefined)
+    const value = await api.save(validateSettings(form), key || undefined)
     setState(value); setForm(value.settings); setKey('')
   }
   const save = () => run(async () => { await persist(); setFeedback('设置已保存') })
@@ -88,16 +93,18 @@ export default function SettingsPage() {
   })
   const disabled = busy || loading || !api || !!autoProgress
 
-  return <div className="app-shell">
+  return <div className={`app-shell ${form.ui.sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" aria-label="主导航">
       <div className="brand"><span className="brand-mark"><Bell size={22} strokeWidth={2.1} /></span><div>WeNotice<small>微信桌面通知</small></div></div>
-      <nav>{navigation.map(({ id, title, icon: Icon }) => <button key={id} className={tab === id ? 'selected' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); setFeedback('') }}><Icon size={18} strokeWidth={1.8} />{title}</button>)}</nav>
-      <div className="sidebar-foot"><div><span className={`status-dot ${state.status.phase}`} />{labels[state.status.phase]}</div><span>WeNotice <span className="version">0.1.5</span></span></div>
+      <button className="sidebar-toggle icon-button" aria-label={form.ui.sidebarCollapsed ? '展开导航' : '折叠导航'} onClick={() => update('ui', { ...form.ui, sidebarCollapsed: !form.ui.sidebarCollapsed })}>{form.ui.sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>
+      <nav>{navigation.map(({ id, title, icon: Icon }) => <button key={id} className={tab === id ? 'selected' : ''} title={title} aria-label={title} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); setFeedback('') }}><Icon size={18} strokeWidth={1.8} /><span>{title}</span></button>)}</nav>
+      <div className="sidebar-foot"><label className="theme-picker"><span>界面主题</span><select aria-label="主界面主题" value={form.ui.theme} onChange={e => update('ui', { ...form.ui, theme: e.target.value as Settings['ui']['theme'] })}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><div><span className={`status-dot ${state.status.phase}`} />{labels[state.status.phase]}</div><span>WeNotice <span className="version">0.2.0</span></span></div>
     </aside>
 
     <main className="main-content">
       <header className="page-header"><div><h1>{pageText[tab][0]}</h1><p>{pageText[tab][1]}</p></div><button className="button secondary" disabled={disabled} onClick={() => run(async () => { await api.test(); setFeedback('测试通知已发送') })}><Bell size={16} />测试通知</button></header>
       {!api && <div className="alert info"><Info size={17} /><span>浏览器预览 · 账号连接与桌面通知需在 WeNotice 应用中使用。</span></div>}
+      {state.settingsWarning && <div className="alert error" role="alert"><Info size={17} /><span>{state.settingsWarning}</span></div>}
       {error && <div role="alert" className="alert error"><Info size={17} /><span>{error}</span><button className="icon-button" aria-label="关闭错误提示" onClick={() => setError('')}><X size={16} /></button></div>}
       {feedback && <div role="status" className="alert success"><Check size={17} /><span>{feedback}</span><button className="icon-button" aria-label="关闭提示" onClick={() => setFeedback('')}><X size={16} /></button></div>}
 
@@ -116,7 +123,7 @@ export default function SettingsPage() {
               <div className="history-detail"><p>{notice.content}</p>{notice.test ? <span className="muted">这是一条用于检查显示效果的测试通知。</span> : <div className="session-detail"><code>{notice.sessionId}</code><button className="button text-button" onClick={() => copyId(notice.sessionId)} disabled={busy}><Copy size={14} />复制会话 ID</button></div>}</div>
             </details>) : <div className="empty-state"><span className="empty-icon">{query ? <Search size={26} strokeWidth={1.5} /> : <Bell size={28} strokeWidth={1.5} />}</span><h3>{query ? '没有找到相关通知' : '等待下一条消息'}</h3><p>{query ? '试试其他联系人名称或消息内容。' : '连接微信后，最近收到的消息会显示在这里。'}</p>{query ? <button className="button secondary" onClick={() => setQuery('')}>清除搜索</button> : <button className="button secondary" disabled={disabled} onClick={() => run(async () => { await api.test(); setFeedback('测试通知已发送') })}><Bell size={15} />发送测试通知</button>}</div>}
           </div>
-          <p className="section-note">仅保留本次运行的最近 100 条通知。</p>
+          <p className="section-note">仅保留本次运行的最近 {state.settings.behavior.historyLimit} 条通知。</p>
         </section>
       </>}
 
@@ -141,13 +148,9 @@ export default function SettingsPage() {
         <div className={`connection-result ${state.status.phase}`} role="status"><span className={`status-dot ${state.status.phase}`} /><div><strong>{labels[state.status.phase]}</strong><p>{state.status.detail}</p></div></div>
       </div>}
 
-      {tab === 'notification' && <div className="notification-layout"><div className="settings-column">
-        <section className="panel"><div className="panel-heading"><h2>通知与运行</h2></div><fieldset disabled={busy || loading} className="settings-fields">
-          {([['enabled', '新消息通知', '接收符合规则的微信消息提醒。'], ['launchAtLogin', '开机启动', '登录 Windows 后在托盘运行。'], ['respectMuted', '遵循微信免打扰', '已设为免打扰的会话不弹出通知。']] as const).map(([field, title, description]) => <SettingRow key={field} title={title} description={description}><input type="checkbox" className="switch" role="switch" aria-label={title} checked={form[field]} onChange={event => update(field, event.target.checked)} /></SettingRow>)}
-        </fieldset></section>
-        <section className="panel"><div className="panel-heading"><h2>显示方式</h2></div><fieldset disabled={busy || loading} className="settings-fields"><SettingRow title="液态玻璃" description="根据桌面背景调整，不可用时使用普通材质。"><input type="checkbox" className="switch" role="switch" aria-label="液态玻璃" checked={form.glass} onChange={event => update('glass', event.target.checked)} /></SettingRow><SettingRow title="显示时长"><select aria-label="显示时长" value={form.durationMs} onChange={event => update('durationMs', Number(event.target.value))}>{[3000, 5000, 8000, 10000, 15000].map(value => <option key={value} value={value}>{value / 1000} 秒</option>)}</select></SettingRow><div className="position-setting"><div className="setting-copy"><strong>通知位置</strong><p>{positions.find(position => position.id === form.position)?.title}</p></div><div className="position-screen" role="group" aria-label="选择通知位置">{positions.map(position => <button type="button" key={position.id} className={`position-dot ${position.id} ${form.position === position.id ? 'active' : ''}`} aria-label={position.title} aria-pressed={form.position === position.id} title={position.title} onClick={() => update('position', position.id)}><span /></button>)}<Monitor size={22} strokeWidth={1} aria-hidden="true" /></div></div></fieldset></section>
-        <section className="panel"><div className="panel-heading"><h2>会话过滤</h2></div><fieldset disabled={busy || loading} className="form-fields"><label htmlFor="filter-mode">接收范围</label><select id="filter-mode" value={form.filterMode} onChange={event => update('filterMode', event.target.value as Settings['filterMode'])}><option value="all">所有符合规则的会话</option><option value="whitelist">仅接收名单内的会话</option><option value="blacklist">排除名单内的会话</option></select>{form.filterMode !== 'all' && <><label htmlFor="filter-ids">会话名单</label><textarea id="filter-ids" rows={4} value={form.filterIds.join('\n')} onChange={event => update('filterIds', event.target.value.split('\n'))} placeholder="每行一个会话 ID" spellCheck={false} /><p className="field-help">在概览中展开通知，可复制会话 ID。</p></>}</fieldset></section>
-      </div><section className="preview-panel" aria-label="通知效果预览"><div className="preview-heading"><span className="preview-label"><Monitor size={15} />效果预览</span><span className="live-indicator">实时</span></div><div className={`preview-desktop ${form.position}`}><span className="desktop-label">桌面</span><div className={`preview-toast notification-toast-container visible ${form.glass ? 'glass-preview' : 'solid-preview'}`} style={{ width: previewLayout.width, transform: `${form.position === 'top-center' ? 'translateX(50%) ' : ''}scale(${Math.min(.71, 210 / previewLayout.width)})` }}><div className="preview-toast-surface"><NotificationContent notice={previewNotice} /></div></div><div className="desktop-taskbar"><span /><span /><span /><i /></div></div><div className="preview-description"><strong>{form.glass ? '液态玻璃' : '普通材质'}<span> · {form.durationMs / 1000} 秒</span></strong><p>布局与桌面通知一致，玻璃效果以实际桌面为准。</p></div><button className="button secondary preview-test" disabled={disabled} onClick={() => run(async () => { await persist(); await api.test(); setFeedback('设置已保存，测试通知已发送') })}><Bell size={15} />保存并测试</button></section></div>}
+      {tab === 'appearance' && <div className="notification-layout"><fieldset className="settings-column" disabled={busy || loading}><Group title="通知样式" description="所有调整都会反映在右侧预览中。" reset={() => { update('appearance', { ...defaultAppearance }); update('glass', true) }}><Field title="液态玻璃" help="不可用时自动使用普通材质。"><Toggle label="液态玻璃" value={form.glass} change={v => update('glass', v)} /></Field><AppearanceControls value={form.appearance} change={(key, value) => update('appearance', { ...form.appearance, [key]: value })} displays={displays} /></Group></fieldset><div className="preview-sticky"><NotificationPreview config={presentation(form)} displays={displays} /><button className="button secondary preview-test" disabled={disabled} onClick={() => run(async () => { await persist(); await api.test(); setFeedback('设置已保存，测试通知已发送') })}><Bell size={15} />保存并测试</button></div></div>}
+      {tab === 'behavior' && <fieldset disabled={busy || loading} className="settings-stack"><BehaviorControls form={form} update={update} /></fieldset>}
+      {tab === 'rules' && <fieldset disabled={busy || loading} className="settings-stack rules-page"><RulesControls form={form} update={update} displays={displays} /></fieldset>}
     </main>
     {dirty && <div className="save-bar"><span><span className="unsaved-dot" />有未保存的更改</span><div><button className="button secondary" disabled={busy || loading} onClick={() => { setForm(state.settings); setKey(''); setError(''); setFeedback('') }}>撤销更改</button><button className="button primary" disabled={disabled} onClick={save}>{busy ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}保存设置</button></div></div>}
   </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import type { Notice } from '../../shared/types'
+import { defaultAppearance, type Appearance, type Notice } from '../../shared/types'
+import { displayBody } from '../../shared/notificationLayout'
 import { renderTextWithEmoji } from '../utils/renderTextWithEmoji'
 
 export function NoticeAvatar({ src, name, className = '' }: { src?: string; name: string; className?: string }) {
@@ -12,20 +13,20 @@ export function NoticeAvatar({ src, name, className = '' }: { src?: string; name
 }
 
 // Keep the settings preview and desktop toast text layout in sync.
-export default function NotificationContent({ notice, onClose }: { notice: Notice; onClose?: () => void }) {
-  const hasMultiple = notice.count > 1
+export default function NotificationContent({ notice, onClose, appearance = defaultAppearance }: { notice: Notice; onClose?: () => void; appearance?: Appearance }) {
+  const hasMultiple = notice.count > 1 && appearance.showCount
   const displayCount = notice.count > 99 ? '99+' : notice.count
 
   return (
     <div className="notification-content">
-      <div className="notification-avatar-container">
+      {appearance.showAvatar && <div className="notification-avatar-container">
         <NoticeAvatar src={notice.avatarUrl} name={notice.title} />
         {hasMultiple && (
           <span className="notification-avatar-badge" aria-label={`${notice.count} 条新消息`}>
             {displayCount}
           </span>
         )}
-      </div>
+      </div>}
 
       <div className="notification-main">
         <div className="notification-header">
@@ -38,9 +39,9 @@ export default function NotificationContent({ notice, onClose }: { notice: Notic
             )}
           </div>
           <div className="notification-meta">
-            <time className="notification-time" dateTime={new Date(notice.timestamp * 1000).toISOString()}>
+            {appearance.showTime && <time className="notification-time" dateTime={new Date(notice.timestamp * 1000).toISOString()}>
               {new Date(notice.timestamp * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-            </time>
+            </time>}
             {onClose ? (
               <button 
                 className="notification-close" 
@@ -62,7 +63,7 @@ export default function NotificationContent({ notice, onClose }: { notice: Notic
         </div>
 
         <div className="notification-body">
-          {renderTextWithEmoji(notice.content, 18)}
+          {renderTextWithEmoji(displayBody(notice.content, appearance), appearance.bodySize * 1.35)}
         </div>
       </div>
     </div>
