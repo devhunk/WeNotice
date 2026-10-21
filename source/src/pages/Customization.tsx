@@ -6,7 +6,7 @@ import { evaluateNotification } from '../../shared/notificationPolicy'
 import { notificationLayout } from '../../shared/notificationLayout'
 import { notificationStyle } from '../../shared/notificationStyle'
 import NotificationContent from '../components/NotificationContent'
-import LiquidGlass from '../components/LiquidGlass'
+import NotificationSurface from '../components/NotificationSurface'
 
 export const positionLabels = ['左上角', '顶部居中', '右上角', '左下角', '底部居中', '右下角']
 export function Field({ title, help, children }: { title: string; help?: string; children: ReactNode }) { return <div className="custom-field"><div className="field-copy"><strong>{title}</strong>{help && <p>{help}</p>}</div><div className="field-control">{children}</div></div> }
@@ -28,12 +28,14 @@ export function AppearanceControls({ value, change, displays, overrides, resetOv
   </>
 }
 export function NotificationPreview({ config, notice, title = '通知预览', displays = [] }: { config: Presentation; notice?: Notice; title?: string; displays?: DisplayInfo[] }) {
-  const example = notice || { id: 'preview', sessionId: 'filehelper', title: '文件传输助手', content: '文件已收到，记得查看最新的项目资料。', timestamp: 1781682600, count: 3 }
+  const [sample, setSample] = useState('normal')
+  const samples: Record<string, string> = { short: '收到。', normal: '文件已收到，记得查看最新的项目资料。', long: '明天下午三点开会，请带好资料。[微笑]\n地点：三楼会议室\n议程：设计确认、开发进度和任务安排。\n请提前准备相关内容。' }
+  const example = notice || { id: 'preview', sessionId: 'filehelper', title: '文件传输助手', content: samples[sample], timestamp: 1781682600, count: 3 }
   const area = displays.find(d => d.id === config.appearance.displayId)?.workArea || { width: window.screen.availWidth, height: window.screen.availHeight }
-  const layout = notificationLayout(example.content, config.position, area.width, area.height, config.appearance), scale = Math.min(.84, 260 / layout.width)
+  const layout = notificationLayout(example, config.position, area.width, area.height, config.appearance), scale = Math.min(.84, 260 / layout.width)
   const root = useRef<HTMLDivElement>(null), [height, setHeight] = useState(80)
   useEffect(() => { if (!root.current) return; const node = root.current, observer = new ResizeObserver(() => setHeight(node.offsetHeight)); observer.observe(node); return () => observer.disconnect() }, [])
-  return <aside className="preview-panel"><div className="preview-heading"><strong>{title}</strong><span>实时</span></div><div className={`preview-canvas ${config.position}`} style={{ minHeight: Math.max(250, height * scale + 80) }}><div className="preview-object" style={{ width: layout.width * scale, height: height * scale }}><div ref={root} className="notification-toast-container visible preview-notice" style={{ ...notificationStyle(config.appearance), '--noti-body-lines': layout.maxBodyLines, width: layout.width, transform: `scale(${scale})`, transformOrigin: 'top left' } as CSSProperties}><LiquidGlass cornerRadius={config.appearance.radius} padding={`${config.appearance.padding}px`} blurAmount={0} saturation={120} displacementScale={0} style={{ '--liquid-glass-tint': config.appearance.theme === 'auto' ? `rgba(252,253,251,${config.appearance.opacity})` : undefined } as CSSProperties}><NotificationContent notice={example} appearance={config.appearance} /></LiquidGlass></div></div><div className="preview-taskbar"><i /><i /><i /></div></div><p className="preview-note">{positionLabels[positions.indexOf(config.position)]} · {config.durationMs / 1000} 秒 · {config.glass ? '液态玻璃' : '普通材质'}<br />尺寸与内容同步；玻璃效果以实际桌面为准。</p></aside>
+  return <aside className="preview-panel"><div className="preview-heading"><strong>{title}</strong><span>实时</span></div><div className={`preview-canvas ${config.position}`} style={{ minHeight: Math.max(250, height * scale + 80) }}><div className="preview-object" style={{ width: layout.width * scale, height: height * scale }}><div ref={root} className={`notification-toast-container visible preview-notice notification-style-${config.notificationStyle}`} style={{ ...notificationStyle(config.appearance), '--noti-body-lines': layout.maxBodyLines, width: layout.width, transform: `scale(${scale})`, transformOrigin: 'top left' } as CSSProperties}><NotificationSurface notice={example} appearance={config.appearance} notificationStyle={config.notificationStyle} glass={config.glass} /></div></div><div className="preview-taskbar"><i /><i /><i /></div></div>{!notice && <label className="stack-label">预览消息<Select label="预览消息" value={sample} change={setSample} options={ [['short', '短消息'], ['normal', '普通消息'], ['long', '多行长消息']] } /></label>}<p className="preview-note">{positionLabels[positions.indexOf(config.position)]} · {config.durationMs / 1000} 秒 · {config.glass ? '液态玻璃' : '普通材质'}<br />尺寸与内容同步；玻璃效果以实际桌面为准。</p></aside>
 }
 export function BehaviorControls({ form, update }: { form: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
   const behavior = <K extends keyof Settings['behavior']>(key: K, value: Settings['behavior'][K]) => update('behavior', { ...form.behavior, [key]: value })
@@ -46,7 +48,7 @@ export function BehaviorControls({ form, update }: { form: Settings; update: <K 
       <Field title="显示时长"><NumberInput label="显示时长" value={form.durationMs / 1000} min={2} max={30} unit="秒" change={v => update('durationMs', v * 1000)} /></Field>
       <Field title="通知位置"><Select label="通知位置" value={form.position} change={v => update('position', v as Settings['position'])} options={positions.map((p, i) => [p, positionLabels[i]])} /></Field>
       <Field title="鼠标悬停时暂停关闭"><Toggle label="鼠标悬停时暂停关闭" value={form.behavior.pauseOnHover} change={v => behavior('pauseOnHover', v)} /></Field>
-      <Field title="点击通知"><Select label="点击通知" value={form.behavior.clickAction} change={v => behavior('clickAction', v as 'open' | 'close')} options={ [['open', '打开微信聊天'], ['close', '关闭通知']] } /></Field>
+      <Field title="点击通知"><Select label="点击通知" value={form.behavior.clickAction} change={v => behavior('clickAction', v as 'open' | 'close')} options={ [['open', '唤起微信客户端'], ['close', '关闭通知']] } /></Field>
       <Field title="合并同会话待显示消息"><Toggle label="合并同会话待显示消息" value={form.behavior.mergePending} change={v => behavior('mergePending', v)} /></Field>
       <Field title="待显示队列上限" help="超出上限时丢弃最早待显示通知。"><NumberInput label="待显示队列上限" value={form.behavior.queueLimit} min={1} max={500} change={v => behavior('queueLimit', v)} /></Field>
       <Field title="通知历史上限"><NumberInput label="通知历史上限" value={form.behavior.historyLimit} min={1} max={1000} change={v => behavior('historyLimit', v)} /></Field>

@@ -7,6 +7,7 @@ import { NoticeQueue } from '../core/noticeQueue'
 import { notificationLayout, notificationCoordinates } from '../../shared/notificationLayout'
 import { evaluateNotification, noticeContext, presentation } from '../../shared/notificationPolicy'
 import { createForegroundReader, ForegroundGate } from '../core/wechatForeground'
+import { glassAppearance } from '../../shared/notificationAppearance'
 
 export class NotificationWindows {
   readonly queue: NoticeQueue
@@ -32,10 +33,11 @@ export class NotificationWindows {
       if (!allowed(event) || data?.id !== this.queue.active?.id || !Number.isFinite(data.width) || !Number.isFinite(data.height)) return
       if (!this.delivery) return
       const area = this.display().workArea, a = this.delivery.appearance
-      const width = notificationLayout(this.queue.active!.content, this.delivery.position, area.width, area.height, a).width
-      const maxHeight = Math.max(1, area.height - a.margin * 2)
+      const layout = notificationLayout(this.queue.active!, this.delivery.position, area.width, area.height, a)
+      const width = a.widthMode === 'fixed' ? layout.width : Math.max(Math.min(288, layout.maxWidth), Math.min(layout.maxWidth, Math.ceil(data.width)))
+      const maxHeight = layout.maxHeight
       const height = Math.max(1, Math.min(maxHeight, Math.ceil(data.height)))
-      if (this.win) { const [w, h] = this.win.getSize(); if (w !== width || h !== height) this.win.setSize(width, height); this.position(); this.refreshBackdropCoordinates() }
+      if (this.win) { this.resize(width, height); this.position(); this.refreshBackdropCoordinates() }
     })
     ipcMain.on('notice:glassRect', (event, payload) => { if (allowed(event) && payload?.id === this.queue.active?.id) this.glassRect(payload) })
     ipcMain.on('notice:glassHide', (event, id) => { if (allowed(event) && id === this.queue.active?.id) this.panel?.hide(240) })
@@ -72,6 +74,13 @@ export class NotificationWindows {
     const { x, y } = notificationCoordinates(area, width, height, this.delivery?.position ?? this.settings().position, this.delivery?.appearance.margin ?? this.settings().appearance.margin)
     this.win.setPosition(x, y)
   }
+  private resize(width: number, height: number) {
+    const win = this.win; if (!win) return
+    const [w, h] = win.getSize(); if (w === width && h === height) return
+    const resizable = win.isResizable()
+    try { if (!resizable) win.setResizable(true); win.setSize(width, height) }
+    finally { if (!resizable && !win.isDestroyed()) win.setResizable(false) }
+  }
   private async source() {
     if (this.sourceId) return
     if (!this.sourcePromise) this.sourcePromise = (async () => {
@@ -85,11 +94,11 @@ export class NotificationWindows {
     const policy = evaluateNotification(settings, noticeContext(notice))
     if (!notice.test && ((!previous && !policy.allowed) || this.foreground.suppressed(settings.behavior.hideWhenWechatForeground))) { this.queue.close(notice.id); return }
     clearTimeout(this.idle); const win = this.create()
-    const resolved = previous ? { appearance: previous.appearance, behavior: previous.behavior, position: previous.position, durationMs: previous.durationMs, glass: previous.glass } : notice.test ? presentation(settings) : policy.presentation
+    const resolved = previous ? { appearance: previous.appearance, behavior: previous.behavior, position: previous.position, durationMs: previous.durationMs, glass: previous.glass, notificationStyle: previous.notificationStyle } : notice.test ? presentation(settings) : policy.presentation
     this.delivery = { ...resolved, notice, backdrop: { native: false, width: 1, height: 1, winX: 0, winY: 0 } }
     const display = this.display(), area = display.workArea
-    const layout = notificationLayout(notice.content, resolved.position, area.width, area.height, resolved.appearance)
-    const [, height] = win.getSize(); win.setSize(layout.width, Math.min(height, Math.max(1, area.height - resolved.appearance.margin * 2))); this.position()
+    const layout = notificationLayout(notice, resolved.position, area.width, area.height, resolved.appearance)
+    const [, height] = win.getSize(); this.resize(layout.width, Math.min(height, layout.maxHeight)); this.position()
     if (this.sourceDisplayId !== display.id) this.sourceId = undefined
     if (resolved.glass && !this.native) { await this.source(); if (version === this.showVersion && this.sourceDisplayId !== display.id) { this.sourceId = undefined; await this.source() } }
     if (version !== this.showVersion || this.queue.active?.id !== notice.id || win.isDestroyed()) return
@@ -122,7 +131,7 @@ export class NotificationWindows {
       const radius = this.delivery.appearance.radius
       if (this.panelDpr !== dpr || this.panelRadius !== radius) this.destroyPanel()
       if (!this.panel) {
-        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: radius * dpr, blurSigma: 2 * dpr, displacementScale: 35, aberrationIntensity: .4, saturation: 1.2, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
+        this.panel = this.native.createPanel({ ...bounds, dpr, cornerRadius: radius * dpr, blurSigma: 2 * dpr, displacementScale: glassAppearance.displacementScale, aberrationIntensity: glassAppearance.aberrationIntensity, saturation: glassAppearance.saturation / 100, capturePolicy: 'dda-only', anchorWindow: this.win, lumaBands: bands, onLuma: values => { if (this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:luma', values) } })
         this.panelDpr = dpr
         this.panelRadius = radius
         if (!this.panel) throw new Error('原生玻璃不可用')

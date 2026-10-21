@@ -6,12 +6,14 @@ import { createRequire } from 'node:module'
 import assert from 'node:assert/strict'
 import { readFile, writeFile } from 'node:fs/promises'
 const require = createRequire(import.meta.url)
-const output = resolve('../releases/WeNotice-0.2.0-customization/verification')
+const args = process.argv.slice(2)
+const packageDirectory = args.find(arg => !arg.startsWith('--'))
+const output = resolve(args.find(arg => arg.startsWith('--output='))?.slice(9) || '../releases/WeNotice-0.2.0-customization/verification')
 const temporary = resolve('dist-electron/customization-check')
-const appRoot = process.argv[2] ? resolve(process.argv[2], 'resources/app.asar') : resolve('.')
+const appRoot = packageDirectory ? resolve(packageDirectory, 'resources/app.asar') : resolve('.')
 await mkdir(temporary, { recursive: true }); await mkdir(output, { recursive: true })
 await build({ entryPoints: { main: 'tests/electronCustomizationCheck.ts', preload: 'tests/customizationPreload.ts' }, bundle: true, platform: 'node', target: 'node22', format: 'cjs', outdir: temporary, outExtension: { '.js': '.cjs' }, external: ['electron', 'koffi', '@hicccc77/electron-liquid-glass'] })
-if (process.argv[2]) {
+if (packageDirectory) {
   const { extractFile } = require('@electron/asar')
   const preload = extractFile(appRoot, 'dist-electron/notificationPreload.cjs')
   assert.deepEqual(preload, await readFile('dist-electron/notificationPreload.cjs'), 'Packaged preload differs from the build')

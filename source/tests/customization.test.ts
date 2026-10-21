@@ -6,9 +6,22 @@ import { evaluateNotification, inQuietHours } from '../shared/notificationPolicy
 import { notificationCoordinates, notificationLayout } from '../shared/notificationLayout'
 import { NoticeQueue } from '../electron/core/noticeQueue'
 import { ForegroundGate, isWechatProcess } from '../electron/core/wechatForeground'
+import { presentation } from '../shared/notificationPolicy'
 const settings = () => structuredClone(defaults)
 const context = { sessionId: 'friend', content: '收到 HELLO 文件', muted: false, folded: false, statusKnown: true, outgoing: false as boolean | null }
 const rule = (id = 'a'): NotificationRule => ({ id, name: id, enabled: true, condition: { kind: 'all', sessionIds: [], includes: [], excludes: [] }, action: { notify: true, bypassQuiet: false, bypassMuted: false, appearance: {} } })
+test('两种通知样式均保留自定义参数、规则和前台抑制，固定宽度不受默认自适应上限限制', () => {
+  for (const style of ['wechat', 'glass'] as const) {
+    const input = settings(); input.notificationStyle = style; input.rules = [rule()]; input.appearance = { ...input.appearance, widthMode: 'fixed', width: 800, bodySize: 22, radius: 23 }
+    const saved = validateSettings(input), effective = presentation(saved)
+    assert.equal(saved.behavior.hideWhenWechatForeground, true); assert.equal(saved.rules[0].id, 'a'); assert.equal(effective.appearance.radius, 23); assert.equal(effective.glass, style === 'glass')
+    assert.equal(notificationLayout('消息', 'bottom-center', 1920, 1080, effective.appearance).width, 800)
+  }
+})
+test('本地自定义旧配置缺少样式字段时迁移为玻璃且保留已有外观', () => {
+  const { notificationStyle: _, ...legacy } = settings(); legacy.appearance.avatarSize = 56
+  const saved = validateSettings(legacy); assert.equal(saved.notificationStyle, 'glass'); assert.equal(saved.appearance.avatarSize, 56); assert.equal(saved.ui.theme, legacy.ui.theme)
+})
 test('旧配置迁移补默认值，保留连接字段且不共享可变对象', () => {
   const { schemaVersion, appearance, behavior, rules, quietHours, ui, ...legacy } = settings()
   const next = validateSettings({ ...legacy, accountDir: 'D:/wxid_demo_ab12', accountId: 'wxid_demo_ab12' })

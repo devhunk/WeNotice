@@ -1,5 +1,6 @@
 export type Position = 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left' | 'top-center' | 'bottom-center'
 export type Theme = 'system' | 'light' | 'dark'
+export type NotificationStyle = 'wechat' | 'glass'
 export interface Appearance {
   theme: 'auto' | 'light' | 'dark' | 'custom'; background: string; textColor: string; opacity: number;
   avatarSize: number; avatarRadius: number; titleSize: number; bodySize: number; radius: number; padding: number;
@@ -19,11 +20,11 @@ export interface Settings {
   accountDir: string; accountId: string; libraryPath: string; keyLibraryPath: string;
   enabled: boolean; launchAtLogin: boolean; respectMuted: boolean;
   filterMode: 'all' | 'whitelist' | 'blacklist'; filterIds: string[];
-  position: Position; durationMs: number; glass: boolean; pollSeconds: number;
+  position: Position; durationMs: number; glass: boolean; notificationStyle: NotificationStyle; pollSeconds: number;
   schemaVersion: 2; ui: { theme: Theme; sidebarCollapsed: boolean }; appearance: Appearance; behavior: Behavior;
   rules: NotificationRule[]; quietHours: { enabled: boolean; periods: QuietPeriod[] };
 }
-export const defaults: Settings = { accountDir: '', accountId: '', libraryPath: '', keyLibraryPath: '', enabled: true, launchAtLogin: false, respectMuted: true, filterMode: 'all', filterIds: [], position: 'top-right', durationMs: 5000, glass: true, pollSeconds: 5, schemaVersion: 2, ui: { theme: 'system', sidebarCollapsed: false }, appearance: defaultAppearance, behavior: defaultBehavior, rules: [], quietHours: { enabled: false, periods: [] } }
+export const defaults: Settings = { accountDir: '', accountId: '', libraryPath: '', keyLibraryPath: '', enabled: true, launchAtLogin: false, respectMuted: true, filterMode: 'all', filterIds: [], position: 'top-right', durationMs: 5000, glass: true, notificationStyle: 'wechat', pollSeconds: 5, schemaVersion: 2, ui: { theme: 'system', sidebarCollapsed: false }, appearance: defaultAppearance, behavior: defaultBehavior, rules: [], quietHours: { enabled: false, periods: [] } }
 export interface AccountCandidate { accountDir: string; accountId: string; modifiedAt: number }
 export interface AutoProgress { phase: 'detecting' | 'scanning' | 'verifying' | 'saving'; detail: string }
 export interface Session { id: string; timestamp: number; unread: number; summary: string }
@@ -34,9 +35,9 @@ export interface Status { phase: 'idle' | 'connecting' | 'listening' | 'paused' 
 export interface PublicState { settings: Settings; hasKey: boolean; status: Status; history: Notice[]; autoProgress?: AutoProgress | null; settingsWarning?: string }
 export interface DbConfig { accountDir: string; accountId: string; libraryPath: string; key: string }
 export interface Backdrop { native: boolean; sourceId?: string; width: number; height: number; winX: number; winY: number }
-export interface Presentation { appearance: Appearance; behavior: Behavior; position: Position; durationMs: number; glass: boolean }
+export interface Presentation { appearance: Appearance; behavior: Behavior; position: Position; durationMs: number; glass: boolean; notificationStyle: NotificationStyle }
 export interface DisplayInfo { id: string; label: string; workArea?: { width: number; height: number } }
-export interface Delivery extends Presentation { notice: Notice; backdrop: Backdrop; layout?: { width: number; maxBodyLines: number } }
+export interface Delivery extends Presentation { notice: Notice; backdrop: Backdrop; layout?: { width: number; maxWidth: number; maxHeight: number; maxBodyLines: number } }
 export interface SettingsAPI {
   state(): Promise<PublicState>; save(settings: Settings, key?: string): Promise<PublicState>;
   choose(kind: 'directory' | 'library'): Promise<string | null>; start(): Promise<void>; pause(): Promise<void>; test(): Promise<void>;

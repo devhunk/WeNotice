@@ -55,25 +55,6 @@
     height: var(--notice-avatar-size, 40px);
   }
 
-  .notification-avatar-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 999px;
-    background: #ff4d4f;
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 1.5px rgba(255, 255, 255, 0.95);
-    z-index: 3;
-    pointer-events: none;
-  }
 
   .notification-main {
     flex: 1;
@@ -112,22 +93,6 @@
     letter-spacing: 0.01em;
   }
 
-  .notification-count-tag {
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 14px;
-    color: #07c160;
-    background: rgba(7, 193, 96, 0.12);
-    box-shadow: 0 0 0 0.5px rgba(7, 193, 96, 0.22);
-    white-space: nowrap;
-  }
 
   .notification-meta {
     display: flex;
@@ -208,3 +173,15 @@
   }
 }
 @media (prefers-reduced-motion: reduce) { .notification-toast-container { transition: none; animation: none !important; } }
+
+// Shared solid surface for WeChat style and glass fallback; custom values override presets.
+.notification-toast-container {
+  overflow: hidden;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  .notification-solid { background: var(--liquid-glass-tint, #fff); box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 3px 9px rgba(0,0,0,.08); cursor: pointer; }
+  .notification-unread { min-width: 0; overflow: hidden; white-space: nowrap; color: var(--noti-title-tertiary, rgba(0,0,0,.55)); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
+}
+.notification-style-wechat { --noti-tint: #fff; --noti-title-color: rgba(0,0,0,.9); --noti-body-color: rgba(0,0,0,.55); --noti-title-tertiary: rgba(0,0,0,.55); --noti-title-halo: none; --noti-body-halo: none; }
+
+.notification-style-wechat .notice-avatar { box-shadow: none; }
+.notification-style-wechat .notice-avatar.placeholder { background: #07c160; text-shadow: none; }

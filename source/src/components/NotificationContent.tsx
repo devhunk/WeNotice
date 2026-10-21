@@ -21,24 +21,15 @@ export default function NotificationContent({ notice, onClose, appearance = defa
     <div className="notification-content">
       {appearance.showAvatar && <div className="notification-avatar-container">
         <NoticeAvatar src={notice.avatarUrl} name={notice.title} />
-        {hasMultiple && (
-          <span className="notification-avatar-badge" aria-label={`${notice.count} 条新消息`}>
-            {displayCount}
-          </span>
-        )}
       </div>}
 
       <div className="notification-main">
         <div className="notification-header">
           <div className="notification-sender">
             <span className="notification-title" title={notice.title}>{notice.title}</span>
-            {hasMultiple && (
-              <span className="notification-count-tag" aria-hidden="true">
-                {displayCount}条新消息
-              </span>
-            )}
           </div>
           <div className="notification-meta">
+            {hasMultiple && <span className="notification-unread" aria-label={`${notice.count} 条新消息`}>{displayCount} 条</span>}
             {appearance.showTime && <time className="notification-time" dateTime={new Date(notice.timestamp * 1000).toISOString()}>
               {new Date(notice.timestamp * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
             </time>}

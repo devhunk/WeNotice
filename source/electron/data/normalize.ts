@@ -1,6 +1,7 @@
 import { decompress } from 'fzstd'
 import type { Message, Session } from '../../shared/types'
 import { accountIdentity } from '../../shared/accountIdentity'
+import { messageSummary } from './messageSummary'
 
 export function parseNativeJson(json: string): any {
   // Preserve 64-bit message IDs before JSON.parse rounds them.
@@ -25,17 +26,6 @@ function decode(raw: unknown): string {
     return raw
   } catch { return '[无法解码的消息]' }
 }
-function summary(content: string, type: number): string {
-  const text = content.replace(/^[^\s:<>]+:\n/, '')
-  if (type === 1) return text
-  const labels: Record<number, string> = { 3: '[图片]', 34: '[语音]', 43: '[视频]', 47: '[表情]', 48: '[位置]', 50: '[通话]', 10000: '[系统消息]', 10002: '[撤回消息]' }
-  if (labels[type]) return labels[type]
-  if (type === 49 || (type & 0xffff) === 49) {
-    const title = text.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1]
-    return title ? `[分享] ${title.replace(/<[^>]*>/g, '').slice(0, 300)}` : '[分享或文件]'
-  }
-  return '[新消息]'
-}
 export function normalizeSession(row: any): Session {
   return { id: str(row.username ?? row.user_name ?? row.userName ?? row.usrName ?? row.UsrName ?? row.talker ?? row.talker_id), timestamp: seconds(row.last_timestamp ?? row.lastTimestamp ?? row.last_msg_time ?? row.sort_timestamp), unread: Number(row.unread_count ?? row.unreadCount ?? row.unreadcount) || 0, summary: str(row.summary ?? row.digest ?? row.last_msg) }
 }
@@ -55,5 +45,5 @@ export function normalizeMessage(row: any, sessionId: string, selfId: string): M
   const sortSeq = Number(row.sort_seq ?? row.sortSeq) || timestamp * 1000
   const type = Number(row.local_type ?? row.localType) || 1
   const identity = serverId && serverId !== '0' ? ['server', serverId] : ['local', scope, table, localId, timestamp, sortSeq, sender, type]
-  return { id: JSON.stringify([sessionId, ...identity]), sessionId, timestamp, sortSeq, localId, sender, outgoing: outgoing as boolean | null, content: summary(content, type).slice(0, 2000) }
+  return { id: JSON.stringify([sessionId, ...identity]), sessionId, timestamp, sortSeq, localId, sender, outgoing: outgoing as boolean | null, content: messageSummary(content, type, sessionId).slice(0, 2000) }
 }

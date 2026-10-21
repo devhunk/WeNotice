@@ -4,7 +4,7 @@ import { defaults, type AccountCandidate, type AutoProgress, type PublicState, t
 import { NoticeAvatar } from '../components/NotificationContent'
 import '../components/NotificationToast.scss'
 import './SettingsPage.scss'
-import { AppearanceControls, BehaviorControls, RulesControls, NotificationPreview, Group, Field, Toggle } from './Customization'
+import { AppearanceControls, BehaviorControls, RulesControls, NotificationPreview, Group, Field, Toggle, Select } from './Customization'
 import { defaultAppearance, type DisplayInfo } from '../../shared/types'
 import { presentation } from '../../shared/notificationPolicy'
 import { validateSettings } from '../../shared/preferences'
@@ -148,7 +148,7 @@ export default function SettingsPage() {
         <div className={`connection-result ${state.status.phase}`} role="status"><span className={`status-dot ${state.status.phase}`} /><div><strong>{labels[state.status.phase]}</strong><p>{state.status.detail}</p></div></div>
       </div>}
 
-      {tab === 'appearance' && <div className="notification-layout"><fieldset className="settings-column" disabled={busy || loading}><Group title="通知样式" description="所有调整都会反映在右侧预览中。" reset={() => { update('appearance', { ...defaultAppearance }); update('glass', true) }}><Field title="液态玻璃" help="不可用时自动使用普通材质。"><Toggle label="液态玻璃" value={form.glass} change={v => update('glass', v)} /></Field><AppearanceControls value={form.appearance} change={(key, value) => update('appearance', { ...form.appearance, [key]: value })} displays={displays} /></Group></fieldset><div className="preview-sticky"><NotificationPreview config={presentation(form)} displays={displays} /><button className="button secondary preview-test" disabled={disabled} onClick={() => run(async () => { await persist(); await api.test(); setFeedback('设置已保存，测试通知已发送') })}><Bell size={15} />保存并测试</button></div></div>}
+      {tab === 'appearance' && <div className="notification-layout"><fieldset className="settings-column" disabled={busy || loading}><Group title="通知样式" description="所有调整都会反映在右侧预览中。" reset={() => { update('appearance', { ...defaultAppearance }); update('glass', true); update('notificationStyle', 'wechat') }}><Field title="通知样式"><Select label="通知样式" value={form.notificationStyle} change={v => update('notificationStyle', v as Settings['notificationStyle'])} options={ [['wechat', '微信风格'], ['glass', '液态玻璃']] } /></Field>{form.notificationStyle === 'glass' && <Field title="液态玻璃" help="不可用时自动使用普通材质。"><Toggle label="液态玻璃" value={form.glass} change={v => update('glass', v)} /></Field>}<AppearanceControls value={form.appearance} change={(key, value) => update('appearance', { ...form.appearance, [key]: value })} displays={displays} /></Group></fieldset><div className="preview-sticky"><NotificationPreview config={presentation(form)} displays={displays} /><button className="button secondary preview-test" disabled={disabled} onClick={() => run(async () => { await persist(); await api.test(); setFeedback('设置已保存，测试通知已发送') })}><Bell size={15} />保存并测试</button></div></div>}
       {tab === 'behavior' && <fieldset disabled={busy || loading} className="settings-stack"><BehaviorControls form={form} update={update} /></fieldset>}
       {tab === 'rules' && <fieldset disabled={busy || loading} className="settings-stack rules-page"><RulesControls form={form} update={update} displays={displays} /></fieldset>}
     </main>

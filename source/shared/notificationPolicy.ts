@@ -1,3 +1,4 @@
+import { usesGlass } from './notificationAppearance'
 import type { Contact, Notice, NotificationRule, Presentation, Settings } from './types'
 export interface RuleContext { sessionId: string; content: string; muted: boolean; folded: boolean; statusKnown: boolean; outgoing: boolean | null }
 export function matchingRule(settings: Settings, context: RuleContext) {
@@ -16,7 +17,7 @@ export function inQuietHours(settings: Settings, date = new Date()) {
   })
 }
 export function presentation(settings: Settings, rule?: NotificationRule): Presentation {
-  return { appearance: { ...settings.appearance, ...rule?.action.appearance }, behavior: { ...settings.behavior }, durationMs: rule?.action.durationMs ?? settings.durationMs, position: rule?.action.position ?? settings.position, glass: settings.glass }
+  return { appearance: { ...settings.appearance, ...rule?.action.appearance }, behavior: { ...settings.behavior }, durationMs: rule?.action.durationMs ?? settings.durationMs, position: rule?.action.position ?? settings.position, glass: usesGlass(settings), notificationStyle: settings.notificationStyle }
 }
 export function evaluateNotification(settings: Settings, context: RuleContext, date = new Date(), foreground = false) {
   const rule = matchingRule(settings, context), result = presentation(settings, rule)

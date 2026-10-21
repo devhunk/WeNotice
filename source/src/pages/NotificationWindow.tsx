@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import NotificationContent from '../components/NotificationContent'
-import LiquidGlass from '../components/LiquidGlass'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import NotificationSurface from '../components/NotificationSurface'
+import { createNotificationMeasure } from '../utils/measureNotification'
 import { getLayoutRect, useNotificationAdaptiveTheme, useNotificationNativeAdaptiveTheme } from './useNotificationAdaptiveTheme'
 import type { Delivery } from '../../shared/types'
 import { notificationLayout } from '../../shared/notificationLayout'
@@ -17,6 +17,8 @@ export default function NotificationWindow() {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), remaining = useRef(0), deadline = useRef(0), hovered = useRef(false)
   const api = window.electronAPI?.notification
   current.current = delivery
+  const measure = useMemo(() => createNotificationMeasure(delivery?.appearance), [delivery?.appearance])
+  const layout = delivery ? notificationLayout(delivery.notice, delivery.position, (delivery.layout?.maxWidth ?? 360) + delivery.appearance.margin * 2, (delivery.layout?.maxHeight ?? 320) + delivery.appearance.margin * 2, delivery.appearance, measure) : null
   useEffect(() => {
     if (!api) return
     const remove = api.onShow(data => {
@@ -67,7 +69,7 @@ export default function NotificationWindow() {
     const element = root.current; let frame = 0, lastSize = '', lastGlass = ''
     const report = () => {
       if (current.current?.notice.id !== delivery.notice.id) return
-      const width = (delivery.layout || notificationLayout(delivery.notice.content, delivery.position)).width, height = element.offsetHeight
+      const width = layout!.width, height = element.offsetHeight
       const size = `${width}:${height}`
       if (size !== lastSize) { lastSize = size; api?.resize(delivery.notice.id, width, height) }
       const glass = element.querySelector<HTMLElement>('.liquid-glass')
@@ -84,12 +86,10 @@ export default function NotificationWindow() {
     frame = requestAnimationFrame(report); const timer = setTimeout(report, 150)
     const observer = new ResizeObserver(report); observer.observe(element)
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); observer.disconnect() }
-  }, [delivery?.notice.id, delivery?.backdrop.native, delivery?.backdrop.winX, delivery?.backdrop.winY, delivery?.position, api])
+  }, [delivery?.notice.id, delivery?.backdrop.native, delivery?.backdrop.winX, delivery?.backdrop.winY, delivery?.position, layout?.width, api])
   if (!delivery) return null
   const { notice } = delivery
-  return <div ref={root} id="notification-current" key={notice.id} onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} style={{ ...notificationStyle(delivery.appearance), '--noti-body-lines': delivery.layout?.maxBodyLines || 6 } as React.CSSProperties} className={`notification-toast-container ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
-    <LiquidGlass cornerRadius={delivery.appearance.radius} padding={`${delivery.appearance.padding}px`} blurAmount={0} saturation={120} displacementScale={35} aberrationIntensity={.4} backdropImage={backdrop} backdropStream={stream} nativeBackdrop={delivery.backdrop.native} onClick={() => close(delivery.behavior.clickAction === 'open')}>
-      <NotificationContent notice={notice} appearance={delivery.appearance} onClose={() => close()} />
-    </LiquidGlass>
+  return <div ref={root} id="notification-current" key={notice.id} onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)} style={{ ...notificationStyle(delivery.appearance), width: layout!.width, maxHeight: layout!.maxHeight, '--noti-body-lines': layout!.maxBodyLines } as React.CSSProperties} className={`notification-toast-container notification-style-${delivery.notificationStyle} ${closing ? '' : 'visible'} ${!stream && !delivery.backdrop.native ? 'material-fallback' : ''}`}>
+    <NotificationSurface notice={notice} appearance={delivery.appearance} notificationStyle={delivery.notificationStyle} glass={Boolean(stream || delivery.backdrop.native)} backdropImage={backdrop} stream={stream} native={delivery.backdrop.native} onClick={() => close(delivery.behavior.clickAction === 'open')} onClose={() => close()} />
   </div>
 }

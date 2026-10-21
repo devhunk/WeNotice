@@ -82,7 +82,7 @@ app.whenReady().then(async () => {
   windows.enqueue({ ...notice('large'), content: '很长的消息内容'.repeat(250) }); await wait(350)
   const area = screen.getPrimaryDisplay().workArea, bounds = actual().getBounds(); assert.ok(bounds.width <= area.width && bounds.height <= area.height); assert.ok(bounds.x >= area.x && bounds.y >= area.y)
   await writeFile(join(output, 'desktop-notification-large.png'), (await actual().webContents.capturePage()).toPNG()); checks.push('large fonts and long content constrained to work area')
-  await actual().webContents.executeJavaScript("document.querySelector('.liquid-glass').click()"); await wait(400); assert.equal(windows.queue.active, null); assert.equal(clicks, 0); checks.push('click-to-close does not open chat')
+  await actual().webContents.executeJavaScript("document.querySelector('.notification-surface').click()"); await wait(400); assert.equal(windows.queue.active, null); assert.equal(clicks, 0); checks.push('click-to-close does not open chat')
   config.appearance.width = 240; config.appearance.padding = 32; config.appearance.showAvatar = true
   windows.enqueue({ ...notice('narrow'), count: 123, title: '特别长的联系人名称'.repeat(10) }); await wait(350)
   assert.equal(await actual().webContents.executeJavaScript('document.documentElement.scrollWidth <= innerWidth'), true); windows.queue.clear(); checks.push('minimum card width with maximum avatar, padding and font size')
