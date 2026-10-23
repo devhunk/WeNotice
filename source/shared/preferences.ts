@@ -57,6 +57,7 @@ export function validateSettings(input: unknown): Settings {
     position: choice(raw.position, positions, '位置'), filterMode: choice(raw.filterMode, ['all', 'whitelist', 'blacklist'], '接收范围'), filterIds: strings(raw.filterIds, 2000, '会话名单'), durationMs: Math.round(number(raw.durationMs, 2000, 30000, '显示时长')), pollSeconds: Math.round(number(raw.pollSeconds, 2, 60, '补查间隔')),
     ui: { theme: choice(ui.theme, ['system', 'light', 'dark'], '界面主题'), sidebarCollapsed: boolean(ui.sidebarCollapsed, '折叠侧栏') }, appearance: validateAppearance(appearance) as Appearance,
     behavior: { hideWhenWechatForeground: boolean(behavior.hideWhenWechatForeground, '微信前台时隐藏'), pauseOnHover: boolean(behavior.pauseOnHover, '悬停暂停'), clickAction: choice(behavior.clickAction, ['open', 'close'], '点击操作'), mergePending: boolean(behavior.mergePending, '合并消息'), queueLimit: Math.round(number(behavior.queueLimit, 1, 500, '队列上限')), historyLimit: Math.round(number(behavior.historyLimit, 1, 1000, '历史上限')) },
+    officialAllowIds: strings(raw.officialAllowIds, 2000, '公众号放行名单'),
     rules, quietHours: { enabled: boolean(quiet.enabled, '时段免打扰'), periods } }
 }
 export function connectionChanged(before: Settings, after: Settings, key?: string) {

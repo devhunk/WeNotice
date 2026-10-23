@@ -27,7 +27,10 @@ function decode(raw: unknown): string {
   } catch { return '[无法解码的消息]' }
 }
 export function normalizeSession(row: any): Session {
-  return { id: str(row.username ?? row.user_name ?? row.userName ?? row.usrName ?? row.UsrName ?? row.talker ?? row.talker_id), timestamp: seconds(row.last_timestamp ?? row.lastTimestamp ?? row.last_msg_time ?? row.sort_timestamp), unread: Number(row.unread_count ?? row.unreadCount ?? row.unreadcount) || 0, summary: str(row.summary ?? row.digest ?? row.last_msg) }
+  const rawUnread = row.unread_count ?? row.unreadCount ?? row.unreadcount
+  const value = typeof rawUnread === 'number' || (typeof rawUnread === 'string' && /^\d+$/.test(rawUnread.trim())) ? Number(rawUnread) : NaN
+  const unread = Number.isSafeInteger(value) && value >= 0 ? value : null
+  return { id: str(row.username ?? row.user_name ?? row.userName ?? row.usrName ?? row.UsrName ?? row.talker ?? row.talker_id), timestamp: seconds(row.last_timestamp ?? row.lastTimestamp ?? row.last_msg_time ?? row.sort_timestamp), unread, summary: str(row.summary ?? row.digest ?? row.last_msg) }
 }
 export function normalizeMessage(row: any, sessionId: string, selfId: string): Message {
   const content = decode(row.compress_content) || decode(row.message_content ?? row.content)
@@ -44,6 +47,8 @@ export function normalizeMessage(row: any, sessionId: string, selfId: string): M
   const table = str(row.table_name ?? row._table_name)
   const sortSeq = Number(row.sort_seq ?? row.sortSeq) || timestamp * 1000
   const type = Number(row.local_type ?? row.localType) || 1
+  const baseType = type % 0x100000000, subtype = Math.floor(type / 0x100000000)
+  const system = baseType === 10000 || baseType === 10002 || (baseType === 49 && subtype === 62)
   const identity = serverId && serverId !== '0' ? ['server', serverId] : ['local', scope, table, localId, timestamp, sortSeq, sender, type]
-  return { id: JSON.stringify([sessionId, ...identity]), sessionId, timestamp, sortSeq, localId, sender, outgoing: outgoing as boolean | null, content: messageSummary(content, type, sessionId).slice(0, 2000) }
+  return { id: JSON.stringify([sessionId, ...identity]), sessionId, timestamp, sortSeq, localId, sender, outgoing: outgoing as boolean | null, system, content: messageSummary(content, type, sessionId).slice(0, 2000) }
 }

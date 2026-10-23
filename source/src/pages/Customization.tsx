@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Copy, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { defaultAppearance, defaultBehavior, type Appearance, type DisplayInfo, type Notice, type NotificationRule, type Presentation, type Settings } from '../../shared/types'
+import { defaultAppearance, defaultBehavior, type Appearance, type ConversationOption, type DisplayInfo, type Notice, type NotificationRule, type Presentation, type Settings } from '../../shared/types'
 import { appearanceRanges, positions } from '../../shared/preferences'
 import { evaluateNotification } from '../../shared/notificationPolicy'
 import { notificationLayout } from '../../shared/notificationLayout'
 import { notificationStyle } from '../../shared/notificationStyle'
 import NotificationContent from '../components/NotificationContent'
 import NotificationSurface from '../components/NotificationSurface'
+import SessionPicker from '../components/SessionPicker'
 
 export const positionLabels = ['左上角', '顶部居中', '右上角', '左下角', '底部居中', '右下角']
 export function Field({ title, help, children }: { title: string; help?: string; children: ReactNode }) { return <div className="custom-field"><div className="field-copy"><strong>{title}</strong>{help && <p>{help}</p>}</div><div className="field-control">{children}</div></div> }
@@ -63,26 +64,49 @@ export function BehaviorControls({ form, update }: { form: Settings; update: <K 
 export const newRule = (): NotificationRule => ({ id: crypto.randomUUID(), name: '新规则', enabled: true, condition: { kind: 'all', sessionIds: [], includes: [], excludes: [] }, action: { notify: true, bypassMuted: false, bypassQuiet: false, appearance: {} } })
 export function RulesControls({ form, update, displays }: { form: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void; displays: DisplayInfo[] }) {
   const [selected, select] = useState(''), [sessionId, setSession] = useState('filehelper'), [content, setContent] = useState('文件已收到'), [muted, setMuted] = useState(false), [foreground, setForeground] = useState(false), [clock, setClock] = useState('')
+  const [sessions, setSessions] = useState<ConversationOption[]>([]), [sessionsLoading, setSessionsLoading] = useState(true), [sessionsError, setSessionsError] = useState(''), [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    let active = true
+    setSessionsLoading(true); setSessionsError('')
+    const load = async () => {
+      try {
+        if (!window.weNotice?.sessions) throw new Error('会话接口不可用，请重新启动更新后的应用。')
+        const items = await window.weNotice.sessions()
+        if (active) setSessions(items)
+      } catch (error) {
+        if (active) setSessionsError(`会话读取失败，请确认微信已连接后刷新。${error instanceof Error ? error.message : String(error)}`)
+      } finally { if (active) setSessionsLoading(false) }
+    }
+    void load()
+    return () => { active = false }
+  }, [refresh])
+  const selectableSessions = sessions.filter(item => item.kind !== 'aggregate'), officialSessions = sessions.filter(item => item.kind === 'official')
+  const testSession = sessions.find(item => item.id === sessionId)
   const rule = form.rules.find(r => r.id === selected), replace = (next: NotificationRule) => update('rules', form.rules.map(r => r.id === next.id ? next : r))
   const move = (index: number, offset: number) => { const rules = [...form.rules]; [rules[index], rules[index + offset]] = [rules[index + offset], rules[index]]; update('rules', rules) }
   const test = evaluateNotification(form, { sessionId, content, outgoing: false, muted, folded: false, statusKnown: true }, clock ? new Date(clock) : new Date(), foreground)
   return <>
-    <Group title="接收范围" reset={() => { update('filterMode', 'all'); update('filterIds', []); update('rules', []) }}>
+    <Group title="接收范围" reset={() => { update('filterMode', 'all'); update('filterIds', []); update('officialAllowIds', []); update('rules', []) }}>
+      <div className="session-directory"><p role="status">{sessionsLoading ? '正在读取会话…' : sessionsError || `已读取 ${selectableSessions.length} 个会话；刷新列表不会改变未保存设置。`}</p><button type="button" className="button secondary" disabled={sessionsLoading} onClick={() => setRefresh(value => value + 1)}>刷新会话</button></div>
       <Field title="全局会话名单"><Select label="接收范围" value={form.filterMode} change={v => update('filterMode', v as Settings['filterMode'])} options={ [['all', '所有会话'], ['whitelist', '仅名单内'], ['blacklist', '排除名单内']] } /></Field>
-      {form.filterMode !== 'all' && <label className="stack-label">会话 ID（每行一个）<textarea value={form.filterIds.join('\n')} onChange={e => update('filterIds', e.target.value.split('\n'))} /></label>}
+      {form.filterMode !== 'all' && <SessionPicker label="全局会话名单" options={selectableSessions} value={form.filterIds} onChange={ids => update('filterIds', ids)} loading={sessionsLoading} />}
+      <SessionPicker label="公众号与服务号放行名单" options={officialSessions} value={form.officialAllowIds} onChange={ids => update('officialAllowIds', ids)} loading={sessionsLoading} />
+      <p className="preview-note">公众号与服务号默认不提醒；选择后仍遵循全局开关、会话名单与通知规则。订阅号、服务号聚合会话始终不提醒。</p>
     </Group>
     <Group title="通知规则" description="从上到下首条命中生效；未覆盖的设置继承全局。">
       <div className="rule-list">{form.rules.map((r, i) => <div className={`rule-list-row ${selected === r.id ? 'selected' : ''}`} key={r.id}><Toggle label={`启用 ${r.name}`} value={r.enabled} change={v => replace({ ...r, enabled: v })} /><button className="rule-name" onClick={() => select(selected === r.id ? '' : r.id)}><small>{String(i + 1).padStart(2, '0')}</small>{r.name || '未命名规则'}</button><button className="icon-button" disabled={!i} aria-label={`上移 ${r.name}`} onClick={() => move(i, -1)}><ArrowUp size={14} /></button><button className="icon-button" disabled={i === form.rules.length - 1} aria-label={`下移 ${r.name}`} onClick={() => move(i, 1)}><ArrowDown size={14} /></button><button className="icon-button" aria-label={`复制 ${r.name}`} onClick={() => { const copy = { ...structuredClone(r), id: crypto.randomUUID(), name: r.name + ' 副本' }; update('rules', [...form.rules, copy]); select(copy.id) }}><Copy size={14} /></button><button className="icon-button" aria-label={`删除 ${r.name}`} onClick={() => update('rules', form.rules.filter(x => x.id !== r.id))}><Trash2 size={14} /></button></div>)}</div>
       {!form.rules.length && <p className="inline-empty">尚无单独规则，所有会话使用全局设置。</p>}
       <button className="button secondary" onClick={() => { const r = newRule(); update('rules', [...form.rules, r]); select(r.id) }}><Plus size={15} />添加规则</button>
       {rule && <div className="rule-editor"><label className="stack-label">规则名称<input value={rule.name} maxLength={100} onChange={e => replace({ ...rule, name: e.target.value })} /></label><Field title="会话类型"><Select label="会话类型" value={rule.condition.kind} change={v => replace({ ...rule, condition: { ...rule.condition, kind: v as NotificationRule['condition']['kind'] } })} options={ [['all', '所有类型'], ['private', '私聊'], ['group', '群聊']] } /></Field>
-        {(['sessionIds', 'includes', 'excludes'] as const).map((key, i) => <label className="stack-label" key={key}>{['会话 ID', '包含任意关键词', '排除任意关键词'][i]}<textarea rows={2} placeholder="每行一个，留空不限" value={rule.condition[key].join('\n')} onChange={e => replace({ ...rule, condition: { ...rule.condition, [key]: e.target.value.split('\n') } })} /></label>)}
+        <SessionPicker key={rule.id} label="规则会话名单" options={selectableSessions} value={rule.condition.sessionIds} onChange={ids => replace({ ...rule, condition: { ...rule.condition, sessionIds: ids } })} loading={sessionsLoading} />
+        <p className="preview-note">未选择会话时不限会话。</p>
+        {(['includes', 'excludes'] as const).map((key, i) => <label className="stack-label" key={key}>{['包含任意关键词', '排除任意关键词'][i]}<textarea rows={2} placeholder="每行一个，留空不限" value={rule.condition[key].join('\n')} onChange={e => replace({ ...rule, condition: { ...rule.condition, [key]: e.target.value.split('\n') } })} /></label>)}
         {(['notify', 'bypassQuiet', 'bypassMuted'] as const).map((key, i) => <Field key={key} title={['允许提醒', '绕过时段免打扰', '绕过微信免打扰'][i]}><Toggle label={['允许提醒', '绕过时段免打扰', '绕过微信免打扰'][i]} value={rule.action[key]} change={v => replace({ ...rule, action: { ...rule.action, [key]: v } })} /></Field>)}
         <Field title="覆盖位置"><Select label="覆盖位置" value={rule.action.position || ''} change={v => { const action = { ...rule.action }; if (v) action.position = v as Settings['position']; else delete action.position; replace({ ...rule, action }) }} options={ [['', '继承全局'], ...positions.map((p, i) => [p, positionLabels[i]] as const)] } /></Field>
         <Field title="覆盖时长"><label className="override-toggle"><input type="checkbox" checked={rule.action.durationMs !== undefined} onChange={e => { const action = { ...rule.action }; if (e.target.checked) action.durationMs = form.durationMs; else delete action.durationMs; replace({ ...rule, action }) }} />单独设置</label>{rule.action.durationMs !== undefined && <NumberInput label="规则显示时长" min={2} max={30} value={rule.action.durationMs / 1000} unit="秒" change={v => replace({ ...rule, action: { ...rule.action, durationMs: v * 1000 } })} />}</Field>
         <details className="appearance-overrides"><summary>覆盖通知外观</summary><AppearanceControls value={{ ...form.appearance, ...rule.action.appearance }} overrides={rule.action.appearance} resetOverride={key => { const appearance = { ...rule.action.appearance }; delete appearance[key]; replace({ ...rule, action: { ...rule.action, appearance } }) }} change={(key, v) => replace({ ...rule, action: { ...rule.action, appearance: { ...rule.action.appearance, [key]: v } } })} displays={displays} /></details>
       </div>}
     </Group>
-    <Group title="规则测试" description="使用当前未保存设置；不会发送真实通知。"><div className="rule-test"><div><label className="stack-label">会话 ID<input value={sessionId} onChange={e => setSession(e.target.value)} /></label><label className="stack-label">消息正文<textarea value={content} onChange={e => setContent(e.target.value)} /></label><Field title="微信免打扰"><Toggle label="模拟微信免打扰" value={muted} change={setMuted} /></Field><Field title="微信在前台"><Toggle label="模拟微信在前台" value={foreground} change={setForeground} /></Field><label className="stack-label">测试时间（留空为现在）<input type="datetime-local" value={clock} onChange={e => setClock(e.target.value)} /></label><p className={`test-result ${test.allowed ? 'allowed' : 'blocked'}`} role="status">{test.allowed ? '允许提醒' : '不弹窗'} · {test.reason}<br /><small>匹配规则：{test.rule?.name || '全局设置'}</small></p></div><NotificationPreview config={test.presentation} notice={{ id: 'test-preview', sessionId, content, title: '测试会话', timestamp: Date.now() / 1000, count: 1 }} title="规则效果" displays={displays} /></div></Group>
+    <Group title="规则测试" description="使用当前未保存设置；不会发送真实通知。"><div className="rule-test"><div><SessionPicker label="测试会话" options={selectableSessions} value={sessionId ? [sessionId] : []} onChange={ids => setSession(ids[0] || '')} single loading={sessionsLoading} /><label className="stack-label">消息正文<textarea value={content} onChange={e => setContent(e.target.value)} /></label><Field title="微信免打扰"><Toggle label="模拟微信免打扰" value={muted} change={setMuted} /></Field><Field title="微信在前台"><Toggle label="模拟微信在前台" value={foreground} change={setForeground} /></Field><label className="stack-label">测试时间（留空为现在）<input type="datetime-local" value={clock} onChange={e => setClock(e.target.value)} /></label><p className={`test-result ${test.allowed ? 'allowed' : 'blocked'}`} role="status">{sessionId ? `${test.allowed ? '允许提醒' : '不弹窗'} · ${test.reason}` : '请选择测试会话'}<br /><small>匹配规则：{test.rule?.name || '全局设置'}</small></p></div><NotificationPreview config={test.presentation} notice={{ id: 'test-preview', sessionId, content, title: testSession?.remark || testSession?.name || sessionId || '测试会话', timestamp: Date.now() / 1000, count: 1 }} title="规则效果" displays={displays} /></div></Group>
   </>
 }

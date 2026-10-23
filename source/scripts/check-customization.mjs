@@ -14,6 +14,9 @@ const appRoot = packageDirectory ? resolve(packageDirectory, 'resources/app.asar
 await mkdir(temporary, { recursive: true }); await mkdir(output, { recursive: true })
 await build({ entryPoints: { main: 'tests/electronCustomizationCheck.ts', preload: 'tests/customizationPreload.ts' }, bundle: true, platform: 'node', target: 'node22', format: 'cjs', outdir: temporary, outExtension: { '.js': '.cjs' }, external: ['electron', 'koffi', '@hicccc77/electron-liquid-glass'] })
 if (packageDirectory) {
+  // The helper lives outside app.asar. An otherwise current package can still
+  // contain an old UI Automation helper that freezes WeChat when a toast is clicked.
+  assert.deepEqual(await readFile(resolve(packageDirectory, 'resources/launcher/WeNotice.OpenWechat.exe')), await readFile('resources/launcher/WeNotice.OpenWechat.exe'), 'Packaged WeChat launcher differs from the build; rebuild before testing notification clicks')
   const { extractFile } = require('@electron/asar')
   const preload = extractFile(appRoot, 'dist-electron/notificationPreload.cjs')
   assert.deepEqual(preload, await readFile('dist-electron/notificationPreload.cjs'), 'Packaged preload differs from the build')

@@ -1,0 +1,26 @@
+[data-surface="settings"] {
+  .session-picker { margin: 16px 0; min-width: 0; font-size: 12px; }
+  .session-picker-heading, .session-directory { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .session-directory { margin: 8px 0 16px; font-size: 12px; color: var(--muted); }
+  .session-directory p { margin: 0; overflow-wrap: anywhere; }
+  .session-picker-selected { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .session-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 6px 5px 10px; border-radius: 8px; background: var(--accent-soft); max-width: 100%; min-width: 0; }
+  .session-chip > span { min-width: 0; }
+  .session-chip strong, .session-chip small { display: block; overflow-wrap: anywhere; }
+  .session-chip strong { font-size: 12px; font-weight: 500; }
+  .session-chip small { color: var(--muted); font-size: 10px; margin-top: 2px; }
+  .session-picker-empty { color: var(--muted); font-size: 12px; padding: 8px 0; margin: 0; }
+  .session-picker-options { margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+  .session-picker-search { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+  .session-picker-results { max-height: 270px; overflow-y: auto; margin-top: 7px; }
+  .session-option { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; padding: 8px; border: 0; border-radius: 6px; color: var(--text); background: transparent; text-align: left; }
+  .session-option:hover, .session-option.selected { background: var(--accent-soft); }
+  .session-option img, .session-avatar { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; object-fit: cover; }
+  .session-avatar { display: grid; place-items: center; background: var(--surface-hover); color: var(--muted); }
+  .session-option-copy { flex: 1; min-width: 0; }
+  .session-option-copy strong, .session-option-copy small { display: block; overflow-wrap: anywhere; }
+  .session-option-copy strong { font-size: 12px; font-weight: 500; }
+  .session-option-copy small { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .session-option-kind { color: var(--muted); font-size: 10px; max-width: 74px; }
+  .session-option-check { color: var(--accent); width: 14px; flex-shrink: 0; }
+}

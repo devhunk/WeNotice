@@ -13,6 +13,7 @@ process.on('message', (request: any) => {
       switch (request.method) {
         case 'open': result = adapter.open(request.args[0], request.args[1]); break
         case 'sessions': result = adapter.sessions(); break
+        case 'conversations': result = await adapter.conversations(); break
         case 'messages': result = await adapter.messages(request.args[0], request.args[1]); break
         case 'contact': result = adapter.contact(request.args[0]); break
         case 'close': adapter.close(); break

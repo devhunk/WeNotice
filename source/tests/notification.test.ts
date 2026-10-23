@@ -14,8 +14,8 @@ test('迟到关闭只作用于对应 ID，不关闭下一条通知', () => {
 })
 test('同会话待展示消息合并，其他会话保留顺序', () => {
   const queue = new NoticeQueue(() => {}, () => {})
-  queue.push(notice('a')); queue.push(notice('b', 'group')); queue.push(notice('c', 'group')); queue.push(notice('d'))
-  queue.close('a'); assert.equal(queue.active?.sessionId, 'group'); assert.equal(queue.active?.count, 2); assert.equal(queue.active?.content, 'c')
+  queue.push(notice('a')); queue.push(notice('b', 'group')); queue.push({ ...notice('c', 'group'), title: '项目协作群' }); queue.push(notice('d'))
+  queue.close('a'); assert.equal(queue.active?.sessionId, 'group'); assert.equal(queue.active?.count, 2); assert.equal(queue.active?.content, 'c'); assert.equal(queue.active?.title, '项目协作群')
   queue.close('b'); assert.equal(queue.active?.id, 'd')
 })
 test('64 位 server_id 精度保留，不合并相邻消息', () => {

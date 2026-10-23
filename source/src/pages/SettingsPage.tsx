@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { version } from '../../package.json'
 import { Bell, Check, ChevronDown, ChevronRight, Copy, FolderOpen, Info, LoaderCircle, MessageCircle, Monitor, Pause, Play, Radio, Search, Settings2, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import { defaults, type AccountCandidate, type AutoProgress, type PublicState, type Settings } from '../../shared/types'
 import { NoticeAvatar } from '../components/NotificationContent'
@@ -98,7 +99,7 @@ export default function SettingsPage() {
       <div className="brand"><span className="brand-mark"><Bell size={22} strokeWidth={2.1} /></span><div>WeNotice<small>微信桌面通知</small></div></div>
       <button className="sidebar-toggle icon-button" aria-label={form.ui.sidebarCollapsed ? '展开导航' : '折叠导航'} onClick={() => update('ui', { ...form.ui, sidebarCollapsed: !form.ui.sidebarCollapsed })}>{form.ui.sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>
       <nav>{navigation.map(({ id, title, icon: Icon }) => <button key={id} className={tab === id ? 'selected' : ''} title={title} aria-label={title} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); setFeedback('') }}><Icon size={18} strokeWidth={1.8} /><span>{title}</span></button>)}</nav>
-      <div className="sidebar-foot"><label className="theme-picker"><span>界面主题</span><select aria-label="主界面主题" value={form.ui.theme} onChange={e => update('ui', { ...form.ui, theme: e.target.value as Settings['ui']['theme'] })}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><div><span className={`status-dot ${state.status.phase}`} />{labels[state.status.phase]}</div><span>WeNotice <span className="version">0.2.0</span></span></div>
+      <div className="sidebar-foot"><label className="theme-picker"><span>界面主题</span><select aria-label="主界面主题" value={form.ui.theme} onChange={e => update('ui', { ...form.ui, theme: e.target.value as Settings['ui']['theme'] })}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><div><span className={`status-dot ${state.status.phase}`} />{labels[state.status.phase]}</div><span>WeNotice <span className="version">{version}</span></span></div>
     </aside>
 
     <main className="main-content">

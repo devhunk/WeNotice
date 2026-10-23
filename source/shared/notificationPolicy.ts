@@ -1,4 +1,5 @@
 import { usesGlass } from './notificationAppearance'
+import { sessionKind } from './sessionPolicy'
 import type { Contact, Notice, NotificationRule, Presentation, Settings } from './types'
 export interface RuleContext { sessionId: string; content: string; muted: boolean; folded: boolean; statusKnown: boolean; outgoing: boolean | null }
 export function matchingRule(settings: Settings, context: RuleContext) {
@@ -23,6 +24,8 @@ export function evaluateNotification(settings: Settings, context: RuleContext, d
   const rule = matchingRule(settings, context), result = presentation(settings, rule)
   let reason = ''
   if (!settings.enabled) reason = '全局通知已关闭'
+  else if (sessionKind(context.sessionId) === 'aggregate') reason = '聚合会话不提醒'
+  else if (sessionKind(context.sessionId) === 'official' && !settings.officialAllowIds.includes(context.sessionId)) reason = '公众号或服务号未单独放行'
   else if (context.outgoing !== false) reason = '自发消息或消息方向未知'
   else if (context.folded) reason = '折叠会话'
   else if ((settings.filterMode === 'whitelist' && !settings.filterIds.includes(context.sessionId)) || (settings.filterMode === 'blacklist' && settings.filterIds.includes(context.sessionId))) reason = '会话名单拦截'

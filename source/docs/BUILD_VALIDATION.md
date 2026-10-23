@@ -1,3 +1,11 @@
+# 2026-10-22 点击通知冻结修复
+
+- 实际运行目录为 `releases/WeNotice-0.2.0-customization/win-unpacked`，其中跳转组件仍包含 UI Automation 与 `AttachThreadInput`；源码和默认发布目录已是协议版。旧组件 SHA256 为 `0bae4dd9ee24cb7a0ba417436dd820aef862f24b144289495f988f014d9a490c`。
+- 已备份并替换该运行目录的组件为仅调用 `weixin://` 的版本，SHA256 为 `320c9a405dd7fb5d51848a445a293fc29c3c95c5fde1fdbde28a19b76805e0d4`，并更新包内校验清单。备份、部署记录与回滚脚本位于 `archive/click-freeze-fix-20261022`；回滚与重新应用已在副本上验证。
+- 新增二进制危险调用检查，包内 UI 验证同时核对外置跳转组件与构建输入，避免只检查 ASAR 而遗漏旧组件。
+- `npm test`：64 项通过，包含 6 秒原生看门狗退出、宿主超时终止及再次激活；`npm run typecheck` 通过。受限进程首次测试遇到 `uv_os_get_passwd ENOMEM`，正常 Windows 用户上下文重跑通过。
+- 直接运行替换后的组件，338 毫秒返回 `opened / window`；唤起前后微信进程 ID 未变化，全部报告可响应。未重启微信，未使用辅助功能接口，未自动选择会话；本次未复测真实来信弹窗点击。
+
 # 0.2.0 验证记录
 
 Windows x64 本机验证；测试消息和配置均为合成数据，使用隔离用户目录，未修改现用账号配置。

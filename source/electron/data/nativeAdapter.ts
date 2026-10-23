@@ -3,7 +3,8 @@ import { basename, dirname, join } from 'node:path'
 import { createConnection, type Socket } from 'node:net'
 import { StringDecoder } from 'node:string_decoder'
 import { parseNativeJson, normalizeSession, normalizeMessage } from './normalize'
-import type { Contact, DbConfig, Message, Session } from '../../shared/types'
+import type { Contact, ConversationOption, DbConfig, Message, Session } from '../../shared/types'
+import { sessionKind } from '../../shared/sessionPolicy'
 import type { NativeGrant } from './nativeGrant'
 import { configuredAccountId } from '../../shared/accountIdentity'
 
@@ -25,6 +26,27 @@ const signatures: Record<string, string> = {
   self: 'int32 wcdb_set_my_account_id(int64 handle, const char* accountId)',
   monitorStart: 'int32 wcdb_start_monitor_pipe()', monitorStop: 'void wcdb_stop_monitor_pipe()',
   pipeName: 'int32 wcdb_get_monitor_pipe_name(_Out_ void** outName)'
+}
+const cleanDisplayName = (value: unknown, id: string): string => {
+  const name = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : ''
+  if (!name || name.toLocaleLowerCase() === id.toLocaleLowerCase()) return ''
+  if (/@chatroom$/i.test(name) || /^wxid_/i.test(name)) return ''
+  return name
+}
+const contactNickName = (contact: any, id: string): string => {
+  for (const value of [contact.display_name, contact.displayName, contact.room_name, contact.roomName, contact.chatroom_name, contact.chatroomName, contact.nick_name, contact.nickName, contact.nickname, contact.name]) {
+    const name = cleanDisplayName(value, id)
+    if (name) return name
+  }
+  return ''
+}
+function resolvedContactName(id: string, contact: any, displayName: unknown, privateNicknameFirst = false): string {
+  const group = id.endsWith('@chatroom')
+  const nickname = contactNickName(contact, id)
+  const remark = cleanDisplayName(contact.remark ?? contact.Remark, id)
+  const displayed = cleanDisplayName(displayName, id)
+  const candidates = group ? [displayed, nickname, remark] : privateNicknameFirst ? [nickname, displayed, remark] : [remark, displayed, nickname]
+  return candidates.find(Boolean) || (group ? '群聊' : id)
 }
 export class NativeAdapter {
   private ffi: any; private lib: any; private api: Record<string, any> = {}; private handle: number | bigint = 0;
@@ -94,6 +116,31 @@ export class NativeAdapter {
     if (!Array.isArray(rows) || rows.some(r => r._error || r._info)) throw new Error('组件返回的会话列表格式不兼容。')
     return rows.map(normalizeSession).filter(s => s.id)
   }
+  async conversations(): Promise<ConversationOption[]> {
+    const sessions = this.sessions().filter(s => sessionKind(s.id) !== 'aggregate').sort((a, b) => b.timestamp - a.timestamp)
+    const result: ConversationOption[] = []
+    const visited = new Set<string>()
+    // Batch optional metadata without reading message content or mute status.
+    for (let offset = 0; offset < sessions.length; offset += 100) {
+      const batch = sessions.slice(offset, offset + 100), ids = JSON.stringify(batch.map(s => s.id))
+      let names: Record<string, string> = {}, avatars: Record<string, string> = {}
+      try { names = this.json('names', ids) || {} } catch {}
+      try { avatars = this.json('avatars', ids) || {} } catch {}
+      for (const { id } of batch) {
+        if (visited.has(id)) continue
+        visited.add(id)
+        let contact: any = {}
+        try { contact = this.json('contact', id) || {} } catch {}
+        const remark = contact.remark ?? contact.Remark
+        const avatarUrl = avatars[id]
+        result.push({ id, name: resolvedContactName(id, contact, names[id], true),
+          remark: typeof remark === 'string' ? remark : undefined, kind: sessionKind(id),
+          avatarUrl: typeof avatarUrl === 'string' && /^(https?:|data:image\/)/.test(avatarUrl) ? avatarUrl : undefined })
+      }
+      await new Promise<void>(resolve => setImmediate(resolve))
+    }
+    return result
+  }
   async messages(sessionId: string, since: number): Promise<Message[]> {
     const cursor = [0]; this.check(this.api.cursor(this.handle, sessionId, 200, 1, since, 0, cursor), '打开消息游标')
     if (!cursor[0]) throw new Error('组件返回无效消息游标')
@@ -121,7 +168,7 @@ export class NativeAdapter {
     let avatarUrl: string | undefined
     try { avatarUrl = this.json('avatars', ids)?.[id] } catch { /* avatar is optional */ }
     let state: any; try { state = this.json('status', ids)?.[id] } catch { /* report unknown status */ }
-    return { name: String(contact.remark || contact.Remark || names[id] || contact.nick_name || contact.nickName || contact.nickname || id), alias: typeof contact.alias === 'string' ? contact.alias : undefined, remark: typeof (contact.remark ?? contact.Remark) === 'string' ? contact.remark ?? contact.Remark : undefined, nickName: typeof (contact.nick_name ?? contact.nickName ?? contact.nickname) === 'string' ? contact.nick_name ?? contact.nickName ?? contact.nickname : undefined, avatarUrl: typeof avatarUrl === 'string' && /^(https?:|data:image\/)/.test(avatarUrl) ? avatarUrl : undefined, muted: Boolean(state?.isMuted), folded: Boolean(state?.isFolded), statusKnown: !!state }
+    return { name: resolvedContactName(id, contact, names[id]), alias: typeof contact.alias === 'string' ? contact.alias : undefined, remark: typeof (contact.remark ?? contact.Remark) === 'string' ? contact.remark ?? contact.Remark : undefined, nickName: typeof (contact.nick_name ?? contact.nickName ?? contact.nickname) === 'string' ? contact.nick_name ?? contact.nickName ?? contact.nickname : undefined, avatarUrl: typeof avatarUrl === 'string' && /^(https?:|data:image\/)/.test(avatarUrl) ? avatarUrl : undefined, muted: Boolean(state?.isMuted), folded: Boolean(state?.isFolded), statusKnown: !!state }
   }
   private startMonitor(): boolean {
     if (!this.api.monitorStart || !this.api.monitorStop || !this.api.pipeName) return false

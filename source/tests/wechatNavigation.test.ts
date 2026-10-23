@@ -8,6 +8,12 @@ import { execFile } from 'node:child_process'
 import type { Notice } from '../shared/types'
 const notice: Notice = { id: 'n1', sessionId: 'wxid_friend', title: '朋友', content: 'hello', timestamp: 1, count: 1 }
 
+test('the shipped native helper activates the protocol without UI Automation or input queue attachment', async () => {
+  const helper = await readFile(resolve('resources/launcher/WeNotice.OpenWechat.exe'))
+  assert.doesNotMatch(helper.toString('latin1'), /UIAutomation|AutomationElement|AttachThreadInput|SetForegroundWindow|SendInput/)
+  assert.ok(helper.includes(Buffer.from('weixin://', 'utf16le')), 'The helper must use the registered WeChat protocol')
+})
+
 test('protocol activation accepts IDs without looking up contacts or sending message text', async () => {
   const calls: WechatTarget[] = []
   const navigator = new WechatNavigator(async target => { calls.push(target); return { status: 'opened', scope: 'window' } })

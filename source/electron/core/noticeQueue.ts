@@ -6,7 +6,7 @@ export class NoticeQueue {
   push(notice: Notice) {
     // Merge waiting notices, never mutate an already delivered ID.
     const existing = this.options().mergePending && this.pending.find(n => n.sessionId === notice.sessionId && !n.test && !notice.test)
-    if (existing) { existing.content = notice.content; existing.context = notice.context; existing.timestamp = notice.timestamp; existing.count += notice.count; existing.avatarUrl = notice.avatarUrl || existing.avatarUrl }
+    if (existing) { existing.title = notice.title; existing.content = notice.content; existing.context = notice.context; existing.sourceMessageId = notice.sourceMessageId; existing.timestamp = notice.timestamp; existing.count += notice.count; existing.avatarUrl = notice.avatarUrl || existing.avatarUrl }
     else this.pending.push({ ...notice })
     this.trim()
     this.next()
@@ -18,5 +18,14 @@ export class NoticeQueue {
   clear() { this.pending = []; this.active = null; this.hide() }
   trim() { while (this.pending.length > this.options().queueLimit) this.pending.shift() }
   clearReal() { this.pending = this.pending.filter(n => n.test); if (this.active && !this.active.test) { this.active = null; this.hide(); this.next() } }
+  removeSessions(ids: ReadonlySet<string>) {
+    this.removeWhere(n => !n.test && ids.has(n.sessionId))
+  }
+  removeWhere(predicate: (notice: Notice) => boolean) {
+    this.pending = this.pending.filter(n => !predicate(n))
+    if (this.active && predicate(this.active)) {
+      this.active = null; this.hide(); this.next()
+    }
+  }
   private next() { if (this.active || !this.pending.length) return; this.active = this.pending.shift()!; this.show(this.active) }
 }

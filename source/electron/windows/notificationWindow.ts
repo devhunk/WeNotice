@@ -1,13 +1,14 @@
 // Based on WeFlow notificationWindow.ts; rewritten for ID-scoped delivery and queue ownership.
 import { BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron'
 import { join } from 'node:path'
-import type { Delivery, Notice, Settings } from '../../shared/types'
+import type { Delivery, Notice, Session, Settings } from '../../shared/types'
 import type { GlassPanel } from '@hicccc77/electron-liquid-glass'
 import { NoticeQueue } from '../core/noticeQueue'
 import { notificationLayout, notificationCoordinates } from '../../shared/notificationLayout'
 import { evaluateNotification, noticeContext, presentation } from '../../shared/notificationPolicy'
 import { createForegroundReader, ForegroundGate } from '../core/wechatForeground'
 import { glassAppearance } from '../../shared/notificationAppearance'
+import type { NoticeReadState } from '../core/noticeReadState'
 
 export class NotificationWindows {
   readonly queue: NoticeQueue
@@ -16,12 +17,12 @@ export class NotificationWindows {
   private panelDpr = 0; private ready = false; private delivery?: Delivery; private sourceId?: string
   private sourcePromise?: Promise<void>; private sourceDisplayId?: number; private idle?: NodeJS.Timeout; private watchdog?: NodeJS.Timeout
   private foreground: ForegroundGate; private foregroundTimer?: NodeJS.Timeout; private hovering = false; private panelRadius = -1; private showVersion = 0
-  constructor(private settings: () => Settings, private url: (route: string) => string, private clicked: (notice: Notice) => void, readForeground = createForegroundReader()) {
+  constructor(private settings: () => Settings, private url: (route: string) => string, private clicked: (notice: Notice) => void, readForeground = createForegroundReader(), private readState?: (notice: Notice) => Promise<NoticeReadState>) {
     this.foreground = new ForegroundGate(readForeground)
     try { const mod = require('@hicccc77/electron-liquid-glass'); if (process.platform === 'win32' && mod.isSupported()) this.native = mod } catch {}
     this.queue = new NoticeQueue(notice => { void this.show(notice).catch(() => this.queue.close(notice.id)) }, () => this.hide(), () => this.settings().behavior)
     const allowed = (event: Electron.IpcMainEvent) => this.win && event.sender === this.win.webContents && event.senderFrame === this.win.webContents.mainFrame
-    ipcMain.on('notice:ready', event => { if (!allowed(event)) return; this.ready = true; if (this.delivery && this.queue.active?.id === this.delivery.notice.id) this.send() })
+    ipcMain.on('notice:ready', event => { if (!allowed(event)) return; this.ready = true; if (this.delivery?.layout && this.queue.active?.id === this.delivery.notice.id) this.send() })
     ipcMain.on('notice:received', (event, id) => { if (!allowed(event) || id !== this.queue.active?.id || this.hovering) return; this.armWatchdog(id) })
     ipcMain.on('notice:hover', (event, data) => {
       if (!allowed(event) || data?.id !== this.queue.active?.id || typeof data.paused !== 'boolean' || !this.delivery?.behavior.pauseOnHover) return
@@ -48,7 +49,19 @@ export class NotificationWindows {
     if (this.foreground.suppressed(this.settings().behavior.hideWhenWechatForeground, notice.test)) { this.queue.clearReal(); return }
     this.queue.push(notice)
   }
-  preferencesChanged() { this.queue.trim(); this.checkForeground() }
+  preferencesChanged() {
+    this.queue.removeWhere(notice => !notice.test && !evaluateNotification(this.settings(), noticeContext(notice)).allowed)
+    this.queue.trim(); this.checkForeground()
+  }
+  sessionsChanged(sessions: Session[]) {
+    this.queue.removeSessions(new Set(sessions.filter(s => s.unread === 0).map(s => s.id)))
+    // An unknown state leaves the active item waiting, without showing it.
+    // A later monitor snapshot retries it, even if no new message arrived.
+    const active = this.queue.active
+    if (active && !active.test && !this.delivery && sessions.some(s => s.id === active.sessionId && s.unread !== null && s.unread > 0)) {
+      void this.show(active).catch(() => this.queue.close(active.id))
+    }
+  }
   private checkForeground() {
     if (this.foreground.suppressed(this.settings().behavior.hideWhenWechatForeground)) this.queue.clearReal()
   }
@@ -102,6 +115,19 @@ export class NotificationWindows {
     if (this.sourceDisplayId !== display.id) this.sourceId = undefined
     if (resolved.glass && !this.native) { await this.source(); if (version === this.showVersion && this.sourceDisplayId !== display.id) { this.sourceId = undefined; await this.source() } }
     if (version !== this.showVersion || this.queue.active?.id !== notice.id || win.isDestroyed()) return
+    if (!notice.test && this.readState) {
+      let state: NoticeReadState
+      try { state = await this.readState(notice) }
+      catch {
+        if (version === this.showVersion && this.queue.active?.id === notice.id) this.suspendDisplay()
+        return
+      }
+      if (version !== this.showVersion || this.queue.active?.id !== notice.id || win.isDestroyed()) return
+      this.queue.removeSessions(new Set(state.sessions.filter(s => s.unread === 0).map(s => s.id)))
+      if (version !== this.showVersion || this.queue.active?.id !== notice.id) return
+      if (state.unread === false) { this.queue.close(notice.id); return }
+      if (state.unread === null) { this.suspendDisplay(); return }
+    }
     if (this.settings() !== settings && !previous) { this.delivery = undefined; return this.show(notice) }
     if (this.foreground.suppressed(this.settings().behavior.hideWhenWechatForeground, notice.test)) { this.queue.clearReal(); return }
     if (!resolved.glass) this.destroyPanel()
@@ -111,7 +137,13 @@ export class NotificationWindows {
     win.setIgnoreMouseEvents(false); win.showInactive(); win.setAlwaysOnTop(true, 'screen-saver'); this.armWatchdog(notice.id)
     clearInterval(this.foregroundTimer); this.foregroundTimer = setInterval(() => this.checkForeground(), 250)
   }
-  private send() { if (this.delivery && this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:show', this.delivery) }
+  private send() { if (this.delivery?.layout && this.win && !this.win.isDestroyed()) this.win.webContents.send('notice:show', this.delivery) }
+  private suspendDisplay() {
+    this.delivery = undefined; this.hovering = false
+    clearTimeout(this.watchdog); clearInterval(this.foregroundTimer)
+    this.panel?.hide(0)
+    if (this.win && !this.win.isDestroyed()) { this.win.hide(); this.win.setIgnoreMouseEvents(true, { forward: true }) }
+  }
   private armWatchdog(id: string) { clearTimeout(this.watchdog); this.watchdog = setTimeout(() => this.queue.close(id), (this.delivery?.durationMs ?? this.settings().durationMs) + 10000) }
   private refreshBackdropCoordinates() {
     if (!this.delivery || !this.win) return

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SettingsAPI } from '../shared/types'
 const api: SettingsAPI = {
+  sessions: () => ipcRenderer.invoke('app:sessions'),
   displays: () => ipcRenderer.invoke('app:displays'),
   detectAccounts: directory => ipcRenderer.invoke('app:detectAccounts', directory),
   autoConnect: settings => ipcRenderer.invoke('app:autoConnect', settings), cancelAutoConnect: () => ipcRenderer.invoke('app:cancelAutoConnect'),

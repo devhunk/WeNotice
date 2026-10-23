@@ -8,6 +8,7 @@ import { recoverKey, abortError } from './data/keyRecovery'
 import { prepareAutoConnection } from './data/autoConnection'
 import { DataClient } from './data/client'
 import { MessageMonitor } from './core/monitor'
+import { readNoticeState } from './core/noticeReadState'
 import { NotificationWindows } from './windows/notificationWindow'
 import { WechatNavigator, runWechatHelper } from './core/wechatNavigation'
 import { connectionChanged } from '../shared/preferences'
@@ -92,7 +93,7 @@ async function start(signal?: AbortSignal) {
     if (store.settings.respectMuted && !result.capabilities.includes('status')) throw new Error('组件缺少免打扰状态接口。请更换组件，或关闭“遵循微信免打扰”。')
     monitor = new MessageMonitor(db, () => store.settings, notify, scheduleReconnect, () => {
       if (status.phase === 'listening') { status = { ...status, checkedAt: Date.now() }; publish() }
-    })
+    }, Date.now, sessions => windows.sessionsChanged(sessions))
     await monitor.start(); if (signal?.aborted) throw abortError(); if (captured !== epoch) return
     status = { phase: 'listening', detail: result.mode === 'pipe' ? '消息监听已启动，定时补查已开启' : '组件无实时管道，正在定时检查新消息', ...result, checkedAt: Date.now() }; recoveryDelay = 3000; publish()
   } catch (error) { monitor?.stop(); monitor = null; await db.close(); errorStatus(error) }
@@ -102,7 +103,7 @@ app.on('second-instance', () => { if (store) showSettings() })
 app.whenReady().then(async () => {
   if (!single) return
   app.setAppUserModelId('app.wenotice.desktop'); store = new SettingsStore()
-  windows = new NotificationWindows(() => store.settings, url, notice => { void openNoticeConversation(notice).catch(() => {}) })
+  windows = new NotificationWindows(() => store.settings, url, notice => { void openNoticeConversation(notice).catch(() => {}) }, undefined, notice => readNoticeState(db, notice))
   db = new DataClient(event => {
     if (event.kind === 'change') monitor?.request()
     if (event.kind === 'error') scheduleReconnect(new Error(event.detail))
@@ -116,6 +117,13 @@ app.whenReady().then(async () => {
   tray = new Tray(nativeImage.createFromBitmap(pixels, { width: 32, height: 32 })); tray.on('double-click', showSettings); updateTray()
   const guard = (event: Electron.IpcMainInvokeEvent) => { if (!settingsWindow || event.sender !== settingsWindow.webContents || event.senderFrame !== settingsWindow.webContents.mainFrame) throw new Error('不允许的窗口请求') }
   ipcMain.handle('app:state', event => { guard(event); return state() })
+  ipcMain.handle('app:sessions', event => {
+    guard(event); requireNoAutoConnect()
+    return serialized(async () => {
+      if (status.phase !== 'listening') throw new Error('请先连接微信并开始监听，再刷新会话列表。')
+      return db.conversations()
+    })
+  })
   ipcMain.handle('app:save', (event, settings, key) => {
     guard(event); requireNoAutoConnect(); return serialized(async () => {
       const before = store.settings, running = Boolean(monitor), next = validateSettings(settings)

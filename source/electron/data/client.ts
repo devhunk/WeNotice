@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
-import type { DbConfig, Contact, Message, Session } from '../../shared/types'
+import type { DbConfig, Contact, ConversationOption, Message, Session } from '../../shared/types'
 import { createNativeGrant } from './nativeGrant'
 import { nativeHostExecutable } from './nativeHost'
 export class DataClient {
@@ -54,6 +54,7 @@ export class DataClient {
     })
   }
   sessions() { return this.call<Session[]>('sessions') }
+  conversations() { return this.call<ConversationOption[]>('conversations') }
   messages(id: string, since: number) { return this.call<Message[]>('messages', id, since) }
   contact(id: string) { return this.call<Contact>('contact', id) }
   async close() {

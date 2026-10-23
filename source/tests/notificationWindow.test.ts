@@ -2,22 +2,23 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
 import { runInNewContext } from 'node:vm'
-import { defaults, type Delivery, type Settings } from '../shared/types'
+import { defaults, type Delivery, type Notice, type Settings } from '../shared/types'
+import type { NoticeReadState } from '../electron/core/noticeReadState'
 import { glassAppearance } from '../shared/notificationAppearance'
 
-function fixture() {
+function fixture(readState?: (notice: Notice) => Promise<NoticeReadState>) {
   const listeners = new Map<string, Function>()
   const panels: any[] = [], deliveries: Delivery[] = []
   let captures = 0, settings: Settings = { ...defaults }
   class Window {
     size = [344, 86]; point = [0, 0]
-    resizable = false
+    resizable = false; visible = false
     webContents = { mainFrame: {}, send: (_: string, value: Delivery) => deliveries.push(value), setWindowOpenHandler() {}, on() {}, setZoomFactor() {} }
     getSize() { return this.size } setSize(w: number, h: number) { if (this.resizable) this.size = [w, h] }
     isResizable() { return this.resizable } setResizable(value: boolean) { this.resizable = value }
     getPosition() { return this.point } setPosition(x: number, y: number) { this.point = [x, y] }
     isDestroyed() { return false } loadURL() { return Promise.resolve() }
-    setContentProtection() {} setIgnoreMouseEvents() {} showInactive() {} setAlwaysOnTop() {} on() {} hide() {} destroy() {}
+    setContentProtection() {} setIgnoreMouseEvents() {} showInactive() { this.visible = true } setAlwaysOnTop() {} on() {} hide() { this.visible = false } destroy() {}
   }
   const display = { workArea: { x: 0, y: 0, width: 320, height: 220 }, bounds: { x: 0, y: 0 }, size: { width: 320, height: 220 } }
   const native = { isSupported: () => true, setWindowCapturePolicy: () => true, shutdown() {}, createPanel(options: any) {
@@ -28,11 +29,53 @@ function fixture() {
   const code = buildSync({ entryPoints: ['electron/windows/notificationWindow.ts'], bundle: true, write: false, platform: 'node', format: 'cjs', external: ['electron', 'koffi', '@hicccc77/electron-liquid-glass'] }).outputFiles[0].text
   const mod = { exports: {} as any }
   runInNewContext(code, { module: mod, exports: mod.exports, __dirname: '.', process: { platform: 'win32' }, setTimeout, clearTimeout, setInterval, clearInterval, require: (name: string) => name === 'electron' ? electron : name === '@hicccc77/electron-liquid-glass' ? native : require(name) })
-  const windows = new mod.exports.NotificationWindows(() => settings, () => 'about:blank', () => {}, () => false)
+  const windows = new mod.exports.NotificationWindows(() => settings, () => 'about:blank', () => {}, () => false, readState)
   const event = () => ({ sender: windows.win.webContents, senderFrame: windows.win.webContents.mainFrame })
   const send = (name: string, value?: unknown) => listeners.get(name)!(event(), value)
   return { windows, panels, deliveries, display, captures: () => captures, send, update: (value: Partial<Settings>) => { settings = { ...settings, ...value } } }
 }
+
+const settle = () => new Promise(resolve => setImmediate(resolve))
+const readFixture = (unread: boolean | null): NoticeReadState => ({ unread, sessions: [{ id: 'friend', timestamp: 1, summary: '', unread: unread === null ? null : unread ? 1 : 0 }] })
+const realNotice = (id: string, sessionId = 'friend'): Notice => ({ id, sessionId, title: '好友', content: '内容', timestamp: 1, count: 1 })
+test('notification waits for read verification; a late ready event never shows a read message', async () => {
+  let resolve!: (state: NoticeReadState) => void
+  const f = fixture(() => new Promise(done => { resolve = done }))
+  try {
+    f.windows.enqueue(realNotice('read'))
+    f.send('notice:ready')
+    assert.equal(f.deliveries.length, 0); assert.equal(f.windows.win.visible, false)
+    resolve(readFixture(false)); await settle()
+    assert.equal(f.windows.queue.active, null); assert.equal(f.windows.win.visible, false)
+  } finally { f.windows.shutdown() }
+})
+test('unknown read state suspends an existing display and resumes only on a fresh known snapshot', async () => {
+  let state = readFixture(true)
+  const f = fixture(async () => state)
+  try {
+    f.windows.enqueue(realNotice('waiting')); await settle(); f.send('notice:ready')
+    assert.equal(f.windows.win.visible, true)
+    state = readFixture(null)
+    await f.windows.show(f.windows.queue.active)
+    assert.equal(f.windows.win.visible, false); assert.equal(f.windows.queue.active.id, 'waiting')
+    assert.equal(f.windows.delivery, undefined)
+    state = readFixture(true); f.windows.sessionsChanged(state.sessions); await settle()
+    assert.equal(f.windows.win.visible, true)
+    f.windows.sessionsChanged(readFixture(false).sessions)
+    assert.equal(f.windows.queue.active, null); assert.equal(f.windows.win.visible, false)
+  } finally { f.windows.shutdown() }
+})
+test('late verification cannot revive a removed notification or replace the next one', async () => {
+  let resolve!: (state: NoticeReadState) => void
+  const f = fixture(n => n.id === 'old' ? new Promise(done => { resolve = done }) : Promise.resolve({ unread: true, sessions: [] }))
+  try {
+    f.windows.enqueue(realNotice('old')); f.windows.enqueue(realNotice('next', 'other'))
+    f.windows.sessionsChanged(readFixture(false).sessions); await settle(); f.send('notice:ready')
+    resolve(readFixture(true)); await settle()
+    assert.equal(f.windows.queue.active.id, 'next')
+    assert.equal(f.deliveries.at(-1)?.notice.id, 'next')
+  } finally { f.windows.shutdown() }
+})
 
 test('a short toast after a large toast shrinks the native window and keeps right/bottom margins', () => {
   const f = fixture()

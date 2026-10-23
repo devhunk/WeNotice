@@ -2,6 +2,7 @@ import { build, Platform, Arch } from 'electron-builder'
 import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { verifyPackagedWorker } from './verify-packaged-worker.mjs'
 
 const output = resolve(process.argv[2] || '../releases')
 await build({
@@ -39,3 +40,4 @@ async function verify(node, prefix = '') {
 await verify(tree)
 if (base + end !== bytes.length) throw new Error('ASAR payload length does not match its index')
 console.log(`Verified ${verified} ASAR file hashes and payload length.`)
+await verifyPackagedWorker(archive)
